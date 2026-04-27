@@ -1,19 +1,19 @@
 # AGENTS.md
 
-You are starting an empty repository for a project called Think Tank. This file is the only thing in the repo. Your job for this session is to bootstrap the project, working closely with me as we go. Treat this AGENTS.md as a living document that itself will change over the first iterations of the product. Eventually it will settle into a more permanent document.
+Treat this AGENTS.md as a living document that itself will change over over time.
 
 ## What Think Tank is
 
-A local-first idea workspace where a human and multiple AI agents develop ideas into durable, searchable, versioned artifacts. The core product is an engine generating structured, editable project state, from interaction with the user and with other agents. So claims, questions, evidence, disagreements, decisions, assumptions, artifacts, and changes over time. A CLI tool for ideation with multiple LLMs is built in parallel with the engine. Beyond that, hold the design loosely — the product emerges from the work, not from up-front specification. Other things will be built on top of the engine. An API, perhaps eventually a UI, though that may/may-not be a separate project.
+A local-first idea workspace where a human and multiple AI agents develop ideas into durable, searchable, versioned artifacts. The core product is an engine generating structured, editable project state, from interaction with the user and with other agents. So claims, questions, evidence, disagreements, decisions, assumptions, artifacts, and changes over time. A CLI tool for ideation with multiple LLMs is built in parallel with the engine. Beyond that, hold the design loosely.
 
 ## Inspiration for and Direction on Think Tank
 
 - Inspiration: https://github.com/ajeless/deliberation-room
 - Direction: https://github.com/ajeless/docs/tree/main/think_tank
 
-Study these thoroughly for the first few slices to understand the problem space and the design thinking. The code we write here does not import from them or model itself on them. Do not reference Deliberation Room concepts in code, comments, or commits unless I say so explicitly.
+Study these thoroughly to understand the problem space and the design thinking.
 
-!IMPORTANT!: Think Tank is its own product.
+!IMPORTANT!: Think Tank is its own product.  Treat the inspiration and direction as important guidance, not gospel.
 
 ## How to read the docs
 
@@ -22,7 +22,7 @@ Start with this AGENTS.md. Then read local docs that are relevant to the work:
 - `docs/architecture.md` — active architecture notes and engine/CLI boundaries.
 - `docs/commands.md` — active command intent, reserved syntax, and naming questions.
 
-The external docs are still important during bootstrap:
+Then reat the external docs at:
 
 - Inspiration: https://github.com/ajeless/deliberation-room
 - Direction: https://github.com/ajeless/docs/tree/main/think_tank
@@ -59,7 +59,7 @@ What's deferred (do not pull these in until they're explicitly needed):
 
 ## Toolchain
 
-This project uses Python with `uv` for environment and dependency management. The toolchain rules below are literal — they specify which commands to run and which not to run. They are not aesthetic preferences; mixing toolchains corrupts the environment in ways that are hard to debug.
+This project uses Python with `uv` for environment and dependency management. The toolchain rules below are literal.
 
 **Always use:**
 - `uv add <package>` to add a dependency
@@ -123,7 +123,6 @@ For dependency choices: the stack above is fixed. If a new dependency is needed 
 
 For destructive or non-reversible actions (deleting files, force-pushing, modifying anything outside the repo): always wait for approval.
 
-This is bootstrap-session-specific. The default autonomy level will tighten once project structure exists.
 
 ## Tests
 
@@ -131,19 +130,20 @@ For code or behavior changes, run tests before committing using `uv run pytest`.
 
 For docs-only changes, tests are not required. Say explicitly that tests were skipped because only documentation changed.
 
-## Commits
 
-Do not commit until I have reviewed your work and approved the commit. Commit messages describe what changed and why, not how.
+## Branching and Commits
 
-After the current main-branch bootstrap work, do new implementation work on feature branches. Keep `main` as the synchronized integration branch unless I explicitly ask to work directly there.
+We have working branches.
+- Never work in or commit directly to main. 
+- When starting a new slice/iteration of work, automatically create a working branch from main, unless explicitly directed to do differently.  When done working, do commmit and push directly to the working branch, no approval required. Stop. Then open a PR for review and raise it in the chat and await for feedback and approval or rejection.
 
-## How this file evolves
 
-This file is short on purpose. Rules are added as they earn their place — when a missing rule causes a real problem, the rule gets added.
+## Workflow and Definition of Done
 
-During this early bootstrap period, every task includes a document audit. Review the existing docs and decide whether they need to change. If they do, update them in the same task. If they do not, say explicitly that no doc changes were needed. This includes AGENTS.md itself, which is a living document while the project is taking shape.
-
-If during your work you encounter a situation where this file was silent and you had to guess, surface it at the end of the task and propose a rule. I'll decide whether to add it. Do not edit this file directly.
+- At the end of every slice/iteration do:
+    1. Add to this section any rules/tasks discussed during the work that belong here.
+    2. At this early stage, every slice includes a document audit. Review all .md files in the repo for alignment, consistency, redundancy, staleness. This includes AGENTS.md. Align/make consistent/de-duplicate/make-current the docs in the same task. If no changes were needed, say so explicitly
+    3. If during your work you encounter a situation where this file was silent and you had to guess, surface it at the end of the task and propose a rule. I'll decide whether to add it. Do not edit this file directly.
 
 ## When in doubt
 
