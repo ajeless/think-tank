@@ -49,3 +49,11 @@ my-idea/
 `state.json` starts with `schema_version: 1`, user-supplied project metadata, and intentionally empty top-level collections for the project state.
 
 `think ask` loads the project `state.json` as read-only context, calls the requested `provider:model`, prints the model response, and appends the raw interaction to `transcripts/ask.jsonl`. It does not synthesize, mutate project state, choose default models, run multiple agents, or commit to git.
+
+Packaged model-provider support currently includes:
+
+- OpenAI: `openai:<model>` with `OPENAI_API_KEY`.
+- Anthropic: `anthropic:<model>` with `ANTHROPIC_API_KEY`.
+- Google: `google:<model>` with Google/Vertex credentials supported by aisuite.
+- Ollama: `ollama:<model>` with a local Ollama server, defaulting to `http://localhost:11434`.
+- OpenRouter: `openrouter:<model>` with `OPENROUTER_API_KEY`, routed through OpenRouter's OpenAI-compatible API.

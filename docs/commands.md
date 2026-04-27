@@ -56,6 +56,16 @@ Current behavior:
 - Prints the model response.
 - Appends one JSONL row to `<path>/transcripts/ask.jsonl`.
 
+Packaged providers:
+
+- `openai:<model>`
+- `anthropic:<model>`
+- `google:<model>`
+- `ollama:<model>`
+- `openrouter:<model>`
+
+`openrouter:<model>` is a Think Tank adapter convention for OpenRouter's OpenAI-compatible API. The installed aisuite version does not expose a first-class `openrouter` provider.
+
 Current non-goals:
 
 - No default provider or model.
