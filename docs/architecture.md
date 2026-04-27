@@ -37,6 +37,16 @@ The current aisuite-backed client is intentionally thin. Unit tests should use a
 
 The packaged provider set is intentionally limited to the providers in active early use: OpenAI, Anthropic, Google, Ollama, and OpenRouter. OpenAI, Anthropic, Google, and Ollama use aisuite provider support directly. OpenRouter is routed through OpenRouter's OpenAI-compatible API because the installed aisuite version does not expose a first-class OpenRouter provider.
 
+## Provider Onboarding And Secrets
+
+Think Tank detects provider credentials from the user's environment and may write non-secret configuration under `~/.config/think-tank/config.toml`. Config files may record enabled provider names, auth kinds, and env var names. They must not contain API keys, subscription tokens, bearer tokens, or project-local secrets.
+
+Setup commands may guide users through provider detection and configuration. Work commands must stay non-interactive and must not prompt for credentials mid-run.
+
+Subscription account sign-in is provider-specific and only acceptable through an official supported auth path. The tool must not implement unsupported subscription-token workarounds, and it must not silently fall back from subscription auth to API billing. Any validation that could spend money or hit external provider rate limits must be opt-in.
+
+Provider failures are product errors, not Python tracebacks. The CLI should surface concise messages for missing credentials, quota failures, authentication failures, and provider SDK issues without leaking secret values.
+
 ## Local-First Project State
 
 A Think Tank project is a local directory containing durable state and artifacts. Today that state begins as JSON plus directories for transcripts, notes, and artifacts. Git remains the versioning layer.

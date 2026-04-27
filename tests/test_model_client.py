@@ -4,6 +4,7 @@ import pytest
 
 from think_tank.model_client import (
     AisuiteModelClient,
+    ModelClientCallError,
     ModelClientConfigurationError,
     _new_aisuite_client,
     _new_openrouter_client,
@@ -27,6 +28,16 @@ class FakeAisuiteClient:
     def __init__(self) -> None:
         self.completions = FakeCompletions()
         self.chat = SimpleNamespace(completions=self.completions)
+
+
+class FailingCompletions:
+    def create(self, *, model: str, messages: list[dict[str, str]]):
+        raise RuntimeError("quota failed")
+
+
+class FailingAisuiteClient:
+    def __init__(self) -> None:
+        self.chat = SimpleNamespace(completions=FailingCompletions())
 
 
 def test_aisuite_client_can_be_constructed_without_model_call() -> None:
@@ -76,3 +87,13 @@ def test_openrouter_client_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> 
 
     with pytest.raises(ModelClientConfigurationError, match="OPENROUTER_API_KEY"):
         _new_openrouter_client()
+
+
+def test_aisuite_model_client_wraps_provider_call_errors() -> None:
+    client = AisuiteModelClient(client=FailingAisuiteClient())
+
+    with pytest.raises(ModelClientCallError, match="Model call failed for openai"):
+        client.complete(
+            model="openai:gpt-4o",
+            messages=[{"role": "user", "content": "Hello"}],
+        )
