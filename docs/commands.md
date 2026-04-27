@@ -14,13 +14,13 @@ These notes document the intent behind commands as they are introduced. The comm
 
 ## Reserved Syntax
 
-These command shapes are reserved as current direction, not permanent API:
+These command shapes are either implemented or reserved as current direction, not permanent API:
 
 | Command shape | Intent |
 |---|---|
 | `think setup` | Tool-level onboarding, credentials guidance, and first-run setup. |
 | `think config ...` | Tool-level preferences, not project work. |
-| `think new <path> --name <name>` | Create a local idea project/workspace. |
+| `think new <path> --name <name>` | Create a local idea project/workspace. Implemented. |
 | `think ask ...` | Run a non-interactive ideation/work command. |
 | `think elaborate ...` | Capture a definition, example, clarification, or related note. |
 | `think synthesize ...` | Consolidate agent outputs into durable state or summaries. |
@@ -29,18 +29,18 @@ These command shapes are reserved as current direction, not permanent API:
 
 ## Current Command
 
-### `think project init <path> --name <name>`
+### `think new <path> --name <name>`
 
 Intent: create a local Think Tank project directory containing an initial `state.json`, transcript folder, notes folder, and artifact folders.
 
 Why it exists: before agents can do useful work, Think Tank needs a durable local place for project state, transcripts, notes, and generated artifacts.
 
-Current status: implemented, but naming is provisional.
+Current status: implemented.
 
-Open naming question: `think new <path> --name <name>` may be the better canonical command. It avoids making `project` a top-level namespace before the domain model has earned it, and it avoids `init`, which sounds like tool or current-directory setup.
+Why this name: `think new` avoids making `project` a top-level namespace before the domain model has earned it, and it avoids `init`, which sounds like tool or current-directory setup.
 
 ## Nouns Under Evaluation
 
 The current code uses `project` inside `state.json`, while user-facing language still uses project, workspace, and idea project. That is deliberate. We have not yet learned whether the durable unit should be named primarily as a project, workspace, idea, or something else.
 
-Until that settles, prefer command names that do not require a premature namespace. For example, `think new` may be better than `think project new` unless project-management commands become numerous enough to justify the namespace.
+Until that settles, prefer command names that do not require a premature namespace. Keep `think new` as the blessed creation command unless project-management commands become numerous enough to justify a namespace.

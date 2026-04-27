@@ -17,8 +17,6 @@ app = typer.Typer(
     help="Think Tank local-first idea workspace.",
     no_args_is_help=True,
 )
-project_app = typer.Typer(help="Manage local Think Tank workspaces.")
-app.add_typer(project_app, name="project")
 console = Console()
 
 
@@ -35,8 +33,8 @@ def status() -> None:
     console.print(f"{status_payload['product']} engine ready: {status_payload['ready']}")
 
 
-@project_app.command("init")
-def init_project(
+@app.command("new")
+def new_workspace(
     path: Annotated[Path, typer.Argument(help="Directory where the workspace should be created.")],
     name: Annotated[str, typer.Option("--name", help="Human-supplied project name.")],
 ) -> None:
