@@ -2,7 +2,7 @@
 
 Think Tank is a local-first idea workspace where a human and multiple AI agents develop ideas into durable, searchable, versioned artifacts.
 
-This repository is being bootstrapped incrementally. The first slice establishes the Python package, CLI entrypoint, and test harness only.
+This repository is being bootstrapped incrementally. The current slice provides the Python package, CLI entrypoint, test harness, and initial local workspace creation.
 
 ## Design Notes
 
@@ -14,13 +14,13 @@ This repository is being bootstrapped incrementally. The first slice establishes
 Create a local workspace:
 
 ```bash
-think project init ./my-idea --name "My Idea"
+think new ./my-idea --name "My Idea"
 ```
 
 From a source checkout during development, run the installed command through `uv`:
 
 ```bash
-uv run think project init ./my-idea --name "My Idea"
+uv run think new ./my-idea --name "My Idea"
 ```
 
 The command creates:

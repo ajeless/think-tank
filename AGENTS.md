@@ -99,7 +99,7 @@ This applies to code, config, prompts, and error messages. If you're writing a d
 
 Commands fall into two categories with different rules:
 
-**Setup commands** (`config init`, `config edit`, future `project new`, etc.) — commands the user runs explicitly to configure or initialize something. They may use interactive prompts, menus, validation flows. `questionary` is the right tool for selection menus here. Rich formatting (panels, colors, structured output) is fine.
+**Setup commands** (`new`, `config init`, `config edit`, etc.) — commands the user runs explicitly to configure or initialize something. They may use interactive prompts, menus, validation flows. `questionary` is the right tool for selection menus here. Rich formatting (panels, colors, structured output) is fine.
 
 **Work commands** (`ask`, future `synthesize`, future `visualize`, etc.) — commands that exercise the engine to do real work. They must accept all required input via arguments and flags. They must not prompt interactively. If required input is missing, fail with a clear error pointing at how to provide it. Output is plain text by default, structured (`--json` or similar) when requested.
 
