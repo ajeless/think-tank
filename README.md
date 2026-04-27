@@ -4,6 +4,11 @@ Think Tank is a local-first idea workspace where a human and multiple AI agents 
 
 This repository is being bootstrapped incrementally. The first slice establishes the Python package, CLI entrypoint, and test harness only.
 
+## Design Notes
+
+- [Architecture notes](docs/architecture.md)
+- [Command notes](docs/commands.md)
+
 ## Current CLI
 
 Create a local workspace:
