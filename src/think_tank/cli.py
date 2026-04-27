@@ -13,7 +13,7 @@ from .workspace import WorkspaceAlreadyExistsError, init_workspace
 
 
 app = typer.Typer(
-    name="tt",
+    name="think",
     help="Think Tank local-first idea workspace.",
     no_args_is_help=True,
 )

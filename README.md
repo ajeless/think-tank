@@ -9,7 +9,7 @@ This repository is being bootstrapped incrementally. The first slice establishes
 Create a local workspace:
 
 ```bash
-uv run tt project init ./my-idea --name "My Idea"
+uv run think project init ./my-idea --name "My Idea"
 ```
 
 The command creates:
