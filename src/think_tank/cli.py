@@ -8,7 +8,14 @@ from typing import Annotated
 import typer
 from rich.console import Console
 
-from .engine import get_engine_status
+from .engine import (
+    MissingModelError,
+    MissingPromptError,
+    ProjectStateNotFoundError,
+    ask_project,
+    get_engine_status,
+)
+from .model_client import AisuiteModelClient
 from .workspace import WorkspaceAlreadyExistsError, init_workspace
 
 
@@ -49,3 +56,24 @@ def new_workspace(
 
     console.print(f"Created Think Tank workspace: {result['root']}")
     console.print(f"Initialized state: {result['state_path']}")
+
+
+@app.command("ask")
+def ask(
+    prompt: Annotated[str, typer.Argument(help="Prompt to send to the selected model.")],
+    project: Annotated[Path, typer.Option("--project", help="Think Tank project path.")],
+    model: Annotated[str, typer.Option("--model", help="Explicit provider:model identifier.")],
+) -> None:
+    """Run one non-interactive model interaction and record its transcript."""
+
+    try:
+        result = ask_project(
+            project,
+            prompt=prompt,
+            model=model,
+            client=AisuiteModelClient(),
+        )
+    except (MissingModelError, MissingPromptError, ProjectStateNotFoundError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    console.print(result["response"])
