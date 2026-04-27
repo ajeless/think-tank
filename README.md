@@ -14,6 +14,12 @@ This repository is being bootstrapped incrementally. The first slice establishes
 Create a local workspace:
 
 ```bash
+think project init ./my-idea --name "My Idea"
+```
+
+From a source checkout during development, run the installed command through `uv`:
+
+```bash
 uv run think project init ./my-idea --name "My Idea"
 ```
 

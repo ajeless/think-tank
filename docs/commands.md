@@ -4,6 +4,9 @@ These notes document the intent behind commands as they are introduced. The comm
 
 ## Principles
 
+- Product command examples use `think ...`.
+- From a source checkout, developers can run the same command as `uv run think ...`.
+- `uv run think ...` is a development runner, not the product command surface.
 - Commands should express user intent before internal implementation.
 - Work commands must be non-interactive: required input arrives through arguments and flags.
 - Setup commands may use interactive prompts because the user explicitly asked to configure or initialize something.
@@ -41,4 +44,3 @@ Open naming question: `think new <path> --name <name>` may be the better canonic
 The current code uses `project` inside `state.json`, while user-facing language still uses project, workspace, and idea project. That is deliberate. We have not yet learned whether the durable unit should be named primarily as a project, workspace, idea, or something else.
 
 Until that settles, prefer command names that do not require a premature namespace. For example, `think new` may be better than `think project new` unless project-management commands become numerous enough to justify the namespace.
-
