@@ -10,6 +10,7 @@ def test_cli_help_exits_successfully() -> None:
     result = runner.invoke(app, ["--help"])
 
     assert result.exit_code == 0
+    assert "Usage: think" in result.output
     assert "Think Tank local-first idea workspace." in result.output
 
 
