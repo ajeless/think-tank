@@ -49,11 +49,9 @@ Config files may also record named model profiles as explicit `provider:model` s
 
 Config files may record explicit user-authored defaults under `[defaults]`. Defaults are setup-owned preferences, not product-invented choices. Work commands may use a recorded default only when their command contract explicitly says they do. Until then, commands such as `think ask` must keep requiring explicit command input or an explicit model profile flag.
 
-Setup commands may guide users through provider detection and configuration. Top-level `think init` is the first guided setup flow: it detects implemented ready auth paths, lets the user select the paths to record, may show planned official paths as disabled guidance, writes non-secret auth metadata, and may record model profiles and explicit defaults. Work commands must stay non-interactive and must not prompt for credentials mid-run.
+Setup commands may guide users through provider detection and configuration. Top-level `think init` is the first guided setup flow: it detects implemented ready auth paths, lets the user select the paths to record, writes non-secret auth metadata, and may record model profiles and explicit defaults. Work commands must stay non-interactive and must not prompt for credentials mid-run.
 
-Subscription account sign-in is provider-specific and only acceptable through an official supported auth path. The tool must not implement unsupported subscription-token workarounds, and it must not silently fall back from subscription auth to API billing. Any validation that could spend money or hit external provider rate limits must be opt-in.
-
-Claude Code subscription auth is a separate integration candidate, not a replacement credential for the direct Anthropic API provider. The direct `anthropic:<model>` path remains Anthropic API access through `api_key_env`. A future Claude Code path must be modeled as a product-specific integration or adapter with its own command contract, auth detection, validation, transcript shape, and limitations.
+Subscription and product-account sign-in are deferred. ChatGPT/Codex, Claude/Claude Code, browser-session reuse, and similar product-specific flows are not near-term Think Tank provider auth. The direct `openai:<model>` and `anthropic:<model>` paths remain API access through `api_key_env`; Think Tank must not present subscription products as drop-in replacements for those provider APIs.
 
 Provider failures are product errors, not Python tracebacks. The CLI should surface concise messages for missing credentials, quota failures, authentication failures, and provider SDK issues without leaking secret values.
 
@@ -97,8 +95,8 @@ Auth method names should describe the mechanism, not the provider:
 | `api_key_env` | Provider API key read from a named environment variable. | Store env var names only. |
 | `local_server` | Local service endpoint, such as Ollama. | Store optional endpoint env var names only. |
 | `service_account_env` | Provider service account or application credentials discovered from environment variables. | Store env var names and non-secret metadata only. |
-| `official_oauth` | Official OAuth/device flow intended for third-party API clients. | Store no bearer/refresh tokens until a secure storage decision is made. |
-| `subscription_official` | Official provider-supported subscription auth for third-party tools, if one exists. | Store no subscription tokens in Think Tank config or project state. |
+
+OAuth/device flows and subscription-backed product integrations are intentionally not active auth kinds in the packaged provider set. They may be reconsidered later, but only as explicit design work with a secure storage decision and a command contract that does not blur direct provider API calls with product-specific tools.
 
 Future auth setup should keep this separation:
 
@@ -115,79 +113,32 @@ Fallback rules are deliberately strict:
 
 - If the configured auth method fails, report that failure.
 - If another auth method is also configured, do not switch to it unless the user explicitly selected a fallback policy.
-- Never fall back from subscription/OAuth-style auth to API-key billing silently.
 - Never fall back from a direct provider key to an aggregator key silently.
 - If fallback policies are added later, they must be user-authored config, visible in `config auth list`, and validated explicitly.
 
 Explicit defaults are different from hidden defaults. A setup flow may offer to write a user-selected default model profile or auth preference to config. Work commands may then use that recorded configuration only when the command contract says they can. Think Tank must still never invent a default model, choose a billing path, or retry through a fallback path that the user did not configure.
 
-Unsupported auth paths are out of scope until the provider documents them for third-party tools. Browser-cookie scraping, private subscription-token reuse, or undocumented app-token extraction would violate the no-middleman and no-surprise-billing principles even if technically possible.
+Unsupported auth paths are out of scope. Browser-cookie scraping, private subscription-token reuse, undocumented app-token extraction, or replaying another product's session files would violate the no-middleman and no-surprise-billing principles even if technically possible.
 
-Provider config supports multiple auth method records per provider. The current flat `auth_kind` and `env_vars` fields remain the selected/current method and keep existing config readable. New writes also include an `auth_methods` collection under each provider so setup flows can add implemented official OAuth, service-account, local-server, or subscription-supported methods without treating them as fallback paths. Existing flat provider metadata is still accepted and is normalized in engine results.
+Provider config supports multiple auth method records per provider. The current flat `auth_kind` and `env_vars` fields remain the selected/current method and keep existing config readable. New writes also include an `auth_methods` collection under each provider so setup flows can add implemented API-key, service-account, or local-server methods without treating them as fallback paths. Existing flat provider metadata is still accepted and is normalized in engine results.
 
 `think config auth methods` lists known provider auth method capabilities, including implementation status, official-path status, readiness, selectability, env var names, and notes. It is diagnostic only: it does not read or write config, validate credentials with provider APIs, or print secret values.
 
-`think config auth add` may select among multiple ready auth methods when a provider has more than one implemented method. `--yes` remains deterministic and uses the provider's current primary implemented method. Subscription/OAuth-style methods must not be listed as selectable until they are backed by an official supported provider path.
+`think config auth add` may select among multiple ready auth methods when a provider has more than one implemented method. `--yes` remains deterministic and uses the provider's current primary implemented method. Deferred OAuth or subscription/product methods must not be listed as selectable or packaged as planned provider methods until they return to active scope.
 
-### Official Subscription Auth Roadmap
+### Deferred Subscription And Product Integrations
 
-Reducing live-testing API cost is a real product goal. `think init` should eventually be the guided setup surface for any official provider-supported subscription, OAuth, local, or cloud auth path that Think Tank can use without becoming a credential middleman.
+Reducing live-testing API cost remains a product concern, but subscription-backed and product-account integrations are no longer near-term work. They are larger, product-specific integrations with different auth custody, billing, transcript, and tool-permission semantics than direct provider API calls.
 
-The implementation gate is strict: an auth path is selectable only after the provider documents it for the kind of client Think Tank is building, and after Think Tank has an implementation that stores no provider secrets in TOML or project state. Browser-cookie scraping, undocumented app-token reuse, private subscription-token extraction, or replaying another app's session files remain out of scope.
+Current position:
 
-Official does not always mean general-purpose. Some providers document subscription-backed auth for a specific first-party coding product, while separately documenting API usage and billing for general API clients. Think Tank should treat those as candidate product-specific integrations, not as proof that the same subscription can be used for arbitrary `provider:model` calls.
+- `openai:<model>` means direct OpenAI API access with `OPENAI_API_KEY`.
+- `anthropic:<model>` means direct Anthropic API access with `ANTHROPIC_API_KEY`.
+- ChatGPT/Codex and Claude/Claude Code subscription flows must not be offered by `think init`, `think config auth add`, or `think config auth methods` as near-term provider auth paths.
+- Think Tank must not read product credential files, browser cookies, OAuth tokens, bearer tokens, refresh tokens, or subscription tokens.
+- Any later product integration needs a separate design pass before code: command contract, adapter boundary, validation behavior, transcript shape, cost semantics, and tool-permission limits.
 
-Near-term roadmap:
-
-- Track provider-supported auth methods in the provider registry even before all are implemented, and make only implemented ready methods selectable.
-- Let `think init` explain when a provider has a promising official path that is not implemented yet by showing it as disabled guidance.
-- Prefer local or subscription-backed official paths for live testing when available, then direct API keys, then aggregators only when explicitly selected.
-- Add fallback policy only as visible user-authored config, never as automatic recovery.
-- Keep `think config validate` as the opt-in boundary for any check that may call a provider or spend credits.
-
-Current research snapshot, as of April 28, 2026:
-
-| Provider/product | Official lower-cost or subscription-relevant path | Think Tank status |
-|---|---|---|
-| OpenAI API | API docs document API-key bearer auth; OpenAI Help says ChatGPT and API billing are separate. | Keep `api_key_env` for general OpenAI API calls. Do not treat ChatGPT Plus/Pro as generic API auth. |
-| OpenAI Codex | OpenAI Help documents ChatGPT sign-in for Codex CLI/IDE/app and says Codex is included with ChatGPT plans. | Candidate separate Codex integration, not a drop-in OpenAI API provider path. Needs design before implementation. |
-| Anthropic API | Anthropic API docs require `x-api-key`; Anthropic Help says paid Claude.ai plans do not include API Console usage. | Keep `api_key_env` for direct Anthropic API calls. Do not treat Claude Pro/Max as generic API auth. |
-| Claude Code | Anthropic/Claude Code docs document Claude.ai subscription OAuth credentials for Claude Code. | Candidate Claude Code or Claude Code SDK integration, not a drop-in Messages API auth path. Needs design before implementation. |
-| Google Gemini / Vertex AI | Google documents API keys, OAuth, and Application Default Credentials. | Prioritize official env/ADC support before inventing any Google-specific secret storage. Cost still belongs to the user's Google project. |
-| Ollama | Local server auth needs no provider account or API key. | Already supported as `local_server`; safest path for cost-free live testing. |
-| OpenRouter | Docs document bearer API keys and account credit limits. | Keep explicit `api_key_env`; useful for budgets/limits but not subscription auth. |
-| Groq | Docs document bearer API keys through OpenAI-compatible endpoints. | Keep explicit `api_key_env`; no subscription path currently documented for Think Tank. |
-
-### Claude Code Subscription Auth Design Direction
-
-This section records the first design boundary for Claude Code subscription-backed auth, verified against official docs on April 28, 2026.
-
-Current facts:
-
-- The Claude API is a REST API for programmatic access and requires a Claude Console account plus an API key. Direct API requests require the `x-api-key` header. A paid Claude subscription does not include Claude API or Console access.
-- Claude Code is a separate Anthropic product and supports Claude Pro, Max, Team, and Enterprise subscription OAuth through Claude.ai login. It also supports Console auth, cloud-provider auth, `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `apiKeyHelper`, and `CLAUDE_CODE_OAUTH_TOKEN` with its own precedence rules.
-- Claude Code can generate a long-lived OAuth token with `claude setup-token`; the token is printed for the user to place in `CLAUDE_CODE_OAUTH_TOKEN`. That token is a secret and must not be stored in Think Tank config or project state.
-- Claude Code CLI has non-interactive print mode via `claude -p`, including JSON output options. This makes a future subprocess adapter plausible, but it would be a Claude Code integration with Claude Code behavior, not a direct Anthropic Messages API client.
-- The Claude Agent SDK docs say third-party developers may not offer claude.ai login or rate limits for their products without prior approval and should use the documented API-key auth methods. That blocks a direct SDK-based subscription-login implementation unless Anthropic explicitly approves it for Think Tank's use case.
-
-Design decision:
-
-- Keep the current `anthropic` provider path as direct Anthropic API access through `api_key_env`.
-- Do not represent Claude Code subscription OAuth as `anthropic:...` auth.
-- Do not read, parse, copy, or reuse Claude Code's stored credential files.
-- Do not store `CLAUDE_CODE_OAUTH_TOKEN`, bearer tokens, refresh tokens, browser cookies, or Claude Code credential dumps.
-- Treat Claude Code as a future product-specific integration, likely a separate adapter surfaced explicitly by command/profile configuration after the model profile schema can distinguish generic `provider:model` API clients from tool/product adapters.
-- Prefer a future implementation that shells out to the installed `claude` CLI in non-interactive print mode using user-managed Claude Code auth, with explicit user opt-in and clear transcript/cost semantics.
-- Any future Claude Code integration must disable or tightly constrain editing/tool permissions unless the command is explicitly a code-agent workflow. It must not silently gain file-editing or shell-execution behavior inside a plain ideation command.
-
-Open implementation questions:
-
-- Whether Think Tank should add a new adapter namespace such as `claude_code` or a more general integration profile type instead of extending the current `provider:model` model profile grammar.
-- Whether `think config auth methods` should keep listing Anthropic `subscription_official` as a planned path, or split it into a separate `think config integrations methods` surface once product integrations exist.
-- Whether validation should call `claude auth status --json`, run a tiny `claude -p` request, or offer both as separate diagnostics with clear quota and behavior warnings.
-- How to represent Claude Code output and usage metadata in transcripts without pretending it is the same row shape as direct model API calls.
-
-Research source links for this snapshot:
+Historical research source links from the April 28, 2026 snapshot:
 
 - OpenAI API authentication: https://platform.openai.com/docs/api-reference/authentication
 - OpenAI ChatGPT/API billing separation: https://help.openai.com/en/articles/9039756
@@ -208,9 +159,9 @@ This matrix captures current direction, not complete implementation.
 
 | Provider | Current/future auth kinds | Notes |
 |---|---|---|
-| OpenAI | `api_key_env`; possible future Codex-specific subscription integration. | ChatGPT subscription access is separate from API billing. Codex subscription auth is product-specific and needs separate design. |
-| Anthropic | `api_key_env`; possible future Claude Code-specific subscription integration. | Claude.ai paid plans do not include API Console usage. Claude Code subscription auth is product-specific and needs separate design. |
-| Google / Gemini | `service_account_env`; future `api_key_env` for Gemini API path; possible official OAuth/ADC expansion. | Current Google path uses Vertex-style environment credentials. |
+| OpenAI | `api_key_env`. | ChatGPT/Codex subscription access is deferred and must not be treated as API auth. |
+| Anthropic | `api_key_env`. | Claude/Claude Code subscription access is deferred and must not be treated as API auth. |
+| Google / Gemini | `service_account_env`; future `api_key_env` for Gemini API path. | Current Google path uses Vertex-style environment credentials. OAuth/device flows are deferred. |
 | Ollama | `local_server`. | No provider subscription or remote billing path. |
 | OpenRouter | `api_key_env`. | Aggregator account credits; do not silently fall back to or from direct provider keys. |
 | Groq | `api_key_env`. | OpenAI-compatible API route with Groq account key. |

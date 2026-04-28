@@ -124,13 +124,11 @@ Packaged model-provider support currently includes:
 - OpenRouter: `openrouter:<model>` with `OPENROUTER_API_KEY`, routed through OpenRouter's OpenAI-compatible API.
 - Groq: `groq:<model>` with `GROQ_API_KEY`, routed through Groq's OpenAI-compatible API.
 
-Think Tank does not store provider secrets. Provider credentials are read from environment variables, and config files store only non-secret metadata such as enabled provider names and detected env var names. Provider subscription sign-in is not implemented unless a provider exposes a supported auth path for third-party tools; Think Tank will not silently switch from subscription auth to API billing.
+Think Tank does not store provider secrets. Provider credentials are read from environment variables, and config files store only non-secret metadata such as enabled provider names and detected env var names. Subscription and product-account sign-in are deferred; ChatGPT/Codex, Claude/Claude Code, browser-session reuse, and similar flows are not near-term provider auth paths.
 
-The provider registry distinguishes implemented selectable auth paths from planned official paths. Planned paths may appear in guided setup as disabled guidance, and `think config auth methods` lists auth capability metadata without provider API calls. Config writes accept only implemented ready paths and still store no secret values.
+The provider registry describes packaged auth methods and readiness without provider API calls. Packaged providers currently expose implemented API-key, local-server, and service-account paths only. Config writes accept only implemented ready paths and still store no secret values.
 
-Subscription-backed auth is a roadmap priority for reducing live-testing API costs where providers officially support it. Think Tank will treat product-specific subscription auth, such as coding-tool sign-in flows, as separate integrations unless the provider documents that path for general API clients.
-
-Claude Code subscription auth is one of those product-specific integration candidates. It is not direct `anthropic:<model>` API auth, and Think Tank must not read or store Claude Code credential files or OAuth tokens.
+If subscription or product integrations are reconsidered later, they need a separate design pass before code. They must not be represented as direct `openai:<model>` or `anthropic:<model>` provider auth, and Think Tank must not read or store product credential files, browser cookies, OAuth tokens, or subscription tokens.
 
 `think config auth add <provider>` creates or updates Think Tank's non-secret auth metadata for one known provider. In interactive mode it can ask the user to choose among implemented ready auth methods when a provider has more than one. It records the selected auth kind, detected env var names, and a non-secret auth method record only. It requires required env vars to be visible for API-key providers, supports local Ollama metadata without secrets, and can run non-interactively with `--yes`.
 

@@ -115,7 +115,7 @@ def test_cli_init_can_skip_model_profile(monkeypatch) -> None:
     assert "[defaults]" not in config_text
 
 
-def test_cli_init_auth_choices_show_planned_official_paths_as_disabled(
+def test_cli_init_auth_choices_exclude_deferred_subscription_paths(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "sk-secret")
@@ -124,17 +124,10 @@ def test_cli_init_auth_choices_show_planned_official_paths_as_disabled(
     values = [choice.value for choice in choices]
 
     assert {"provider": "openai", "auth_kind": "api_key_env"} in values
-    planned_choice = next(
-        choice
-        for choice in choices
-        if choice.value == {
-            "provider": "openai",
-            "auth_kind": "subscription_official",
-        }
-    )
-    assert planned_choice.checked is False
-    assert planned_choice.disabled == "official path tracked, not implemented yet"
-    assert "planned official path" in planned_choice.title
+    assert {
+        "provider": "openai",
+        "auth_kind": "subscription_official",
+    } not in values
     assert "sk-secret" not in str(choices)
 
 

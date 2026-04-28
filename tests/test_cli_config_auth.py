@@ -157,9 +157,7 @@ def test_cli_config_auth_methods_reports_capabilities_without_secret_values() ->
     assert "api_key_env: status=implemented" in result.output
     assert "selectable=yes" in result.output
     assert "detected_env_vars=OPENAI_API_KEY" in result.output
-    assert "subscription_official: status=planned_official" in result.output
-    assert "implemented=no" in result.output
-    assert "selectable=no" in result.output
+    assert "subscription_official" not in result.output
     assert "sk-secret" not in result.output
 
 
@@ -182,10 +180,7 @@ def test_cli_config_auth_methods_json_reports_all_capabilities_without_secrets()
     service_account = _auth_method(methods, "service_account_env")
     assert service_account["ready"] is True
     assert service_account["selectable"] is True
-    gemini_api_key = _auth_method(methods, "api_key_env")
-    assert gemini_api_key["support_status"] == "planned_official"
-    assert gemini_api_key["ready"] is False
-    assert gemini_api_key["selectable"] is False
+    assert [method["auth_kind"] for method in methods] == ["service_account_env"]
     assert "gemini-secret" not in result.output
 
 

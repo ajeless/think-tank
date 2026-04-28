@@ -30,7 +30,6 @@ These command shapes are either implemented or reserved as current direction, no
 | `think config auth add <provider>` | Add or enable a provider auth path through setup-only guidance. Implemented. |
 | `think config auth list` | List enabled provider auth metadata without secrets. Implemented. |
 | `think config auth remove <provider>` | Remove or disable a provider auth path from Think Tank config. Implemented. |
-| `think config integrations ...` | Possible future namespace for product-specific integrations such as Claude Code. Reserved, not implemented. |
 | `think config model add <name> --model <provider:model>` | Store a named non-secret model profile. Implemented. |
 | `think config model list` | List named model profiles. Implemented. |
 | `think config model remove <name>` | Remove a named model profile. Implemented. |
@@ -53,7 +52,7 @@ Intent: run an interactive CLI setup session that helps the user configure Think
 
 Why it exists: first-run setup crosses several config concerns: provider auth metadata, model profiles, and explicit defaults. A top-level guided command lets the user make those choices in one place while keeping work commands scriptable.
 
-Where it is going: `think init` should become the guided surface for official provider-supported auth paths, including local providers, OAuth/device flows, Application Default Credentials, and subscription-backed product integrations when a provider documents them for a compatible client. It must not offer unsupported subscription-token or browser-session workarounds.
+Where it is going: `think init` should become the guided surface for implemented provider auth paths such as API-key env vars, local providers, and service-account credentials. Subscription and product-account integrations are deferred and must not be offered as near-term provider auth.
 
 Why it is different from hidden defaults: the user is making visible choices during a setup command. Persisting those choices is not the same as Think Tank silently choosing a provider, model, auth method, billing path, or fallback at work-command runtime.
 
@@ -64,7 +63,6 @@ Current behavior:
 - `think init` may prompt because setup commands may be interactive.
 - Detects implemented ready provider auth paths from the current environment.
 - Lets the user select which implemented ready auth paths to record.
-- May show planned official auth paths as disabled guidance.
 - Writes `~/.config/think-tank/config.toml` by default, or `--config <path>`.
 - Stores provider names, auth kinds, env var names, and auth method records only.
 - Does not store API keys, bearer tokens, refresh tokens, subscription tokens, browser cookies, provider session dumps, or provider secret values.
@@ -77,8 +75,8 @@ Rules to preserve:
 
 - Work commands must remain non-interactive.
 - Any default written by setup must be explicit user-authored config, not an invented product default.
-- Subscription-style auth may be offered only through official supported provider paths, and product-specific subscription paths must not be represented as generic API provider auth.
-- Claude Code subscription OAuth must not be represented as direct `anthropic` API auth.
+- Subscription and product-account auth must not be represented as generic API provider auth.
+- ChatGPT/Codex and Claude/Claude Code subscription flows are deferred and must not be offered by setup/config commands.
 - Fallback between auth methods or providers must remain explicit user-authored policy, never automatic recovery.
 
 ### `think new <path> --name <name>`
@@ -127,7 +125,7 @@ Current behavior:
 
 Intent: manage provider auth metadata without storing provider secrets.
 
-Why it exists: `config init` is a first-pass setup command. As auth support grows to include multiple auth methods per provider, official OAuth/device flows, local servers, and explicit fallback policies, auth needs a focused namespace.
+Why it exists: `config init` is a first-pass setup command. As auth support grows to include multiple API-key, service-account, local-server methods and explicit fallback policies, auth needs a focused namespace.
 
 Current status: implemented for environment and local-server auth metadata. `auth methods`, `auth doctor`, `auth add`, `auth list`, and `auth remove` are implemented.
 
@@ -136,7 +134,7 @@ Reserved commands:
 | Command | Intent |
 |---|---|
 | `think config auth doctor` | Show detected and configured auth paths without printing secret values. Implemented. |
-| `think config auth methods` | Show all known auth method capabilities, including planned official paths, without printing secret values. Implemented. |
+| `think config auth methods` | Show known packaged auth method capabilities without printing secret values. Implemented. |
 | `think config auth add <provider>` | Add or enable an auth path for a provider. May prompt because it is a setup command. Implemented. |
 | `think config auth list` | Show enabled provider auth metadata, including auth kind and env var names, without secret values. Implemented. |
 | `think config auth remove <provider>` | Remove or disable a provider auth path from Think Tank config. Implemented. |
@@ -149,7 +147,7 @@ Current `auth add` behavior:
 - Requires required environment variables to be visible for API-key or service-account providers before recording metadata.
 - Supports Ollama/local-server metadata without requiring a secret.
 - In interactive mode, prompts for auth method selection when a provider has more than one implemented ready method.
-- Does not allow planned official auth methods to be selected or written until implementation exists.
+- Does not allow unimplemented auth methods to be selected or written.
 - Records provider name, selected auth kind, detected env var names, and an auth method record for the selected/current method only.
 - Supports `--yes` for non-interactive setup/test use; `--yes` uses the provider's current primary implemented method and does not select fallback methods.
 - Does not store API keys, bearer tokens, refresh tokens, subscription tokens, browser cookies, provider session dumps, or default models.
@@ -159,25 +157,24 @@ Future behavior:
 - `auth add` may prompt interactively for setup choices beyond the current confirmation and method-selection prompts.
 - `auth add` may record additional non-secret preferences.
 - `auth list` should make any user-authored fallback policy visible if fallback policies are added later.
-- No command may silently switch from subscription/OAuth-style auth to API-key billing.
 - No command may silently fall back from direct provider credentials to aggregator credentials.
 
 Current `auth methods` behavior:
 
 - Does not require the config file to exist and does not read or write config.
 - Lists all packaged providers by default, or one provider with `--provider <name>`.
-- Reports every known auth method with implementation status, official-path status, readiness, selectability, required env var names, detected env var names, missing env var names, and provider notes.
-- Includes planned official paths such as product-specific subscription/OAuth candidates.
+- Reports every packaged auth method with implementation status, official-path status, readiness, selectability, required env var names, detected env var names, missing env var names, and provider notes.
+- Currently exposes implemented API-key, local-server, and service-account paths only.
 - Supports `--json` for machine-readable output.
 - Does not print secret values.
 - Does not call provider APIs or validate credentials.
 
-Claude Code note:
+Deferred product integration note:
 
 - `anthropic` auth methods describe the direct Anthropic API path, currently `api_key_env`.
-- Claude Code subscription OAuth is a product-specific path, not a generic Anthropic API provider auth method.
-- A future Claude Code integration should be explicit, likely outside `think config auth add anthropic`, because it would call Claude Code or the Claude Code/Agent SDK rather than the direct Messages API client.
-- `CLAUDE_CODE_OAUTH_TOKEN` and Claude Code credential files are secrets and must not be written to Think Tank config.
+- Claude Code subscription OAuth is deferred and must not be represented as a generic Anthropic API provider auth method.
+- ChatGPT/Codex and Claude/Claude Code product auth must not be offered by `think config auth add` or `think config auth methods` unless that whole product-integration scope is reopened later.
+- Product tokens, browser cookies, OAuth tokens, and credential files are secrets and must not be written to Think Tank config.
 
 Current `auth doctor` behavior:
 

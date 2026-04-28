@@ -113,7 +113,6 @@ def test_list_provider_auth_methods_reports_capabilities_without_secrets() -> No
     result = list_provider_auth_methods(
         env={
             "OPENAI_API_KEY": "sk-secret",
-            "GEMINI_API_KEY": "gemini-secret",
         },
         provider="openai",
     )
@@ -127,16 +126,11 @@ def test_list_provider_auth_methods_reports_capabilities_without_secrets() -> No
     assert api_key["selectable"] is True
     assert api_key["support_status"] == "implemented"
     assert api_key["detected_env_vars"] == ["OPENAI_API_KEY"]
-
-    subscription = _auth_method(methods, "subscription_official")
-    assert subscription["implemented"] is False
-    assert subscription["official"] is True
-    assert subscription["ready"] is False
-    assert subscription["selectable"] is False
-    assert subscription["support_status"] == "planned_official"
+    assert "subscription_official" not in [
+        method["auth_kind"] for method in methods
+    ]
 
     assert "sk-secret" not in str(result)
-    assert "gemini-secret" not in str(result)
 
 
 def test_list_provider_auth_methods_reports_all_packaged_providers() -> None:
@@ -280,15 +274,38 @@ def test_add_config_auth_rejects_unsupported_auth_kind(
         )
 
 
-def test_add_config_auth_rejects_planned_official_auth_kind(
+def test_add_config_auth_rejects_unimplemented_auth_kind(
     tmp_path: Path,
+    monkeypatch,
 ) -> None:
+    monkeypatch.setattr(
+        "think_tank.provider_registry.PROVIDER_SPECS",
+        (
+            ProviderSpec(
+                name="testai",
+                display_name="Test AI",
+                auth_methods=(
+                    ProviderAuthMethodSpec(
+                        auth_kind="api_key_env",
+                        env_vars=("TESTAI_API_KEY",),
+                        required_env_vars=("TESTAI_API_KEY",),
+                    ),
+                    ProviderAuthMethodSpec(
+                        auth_kind="future_api_key_env",
+                        env_vars=("TESTAI_NEXT_KEY",),
+                        implemented=False,
+                    ),
+                ),
+            ),
+        ),
+    )
+
     with pytest.raises(ValueError, match="not implemented yet"):
         add_config_auth(
             tmp_path / "config.toml",
-            "openai",
-            env={"OPENAI_API_KEY": "sk-secret"},
-            auth_kind="subscription_official",
+            "testai",
+            env={"TESTAI_API_KEY": "secret-key"},
+            auth_kind="future_api_key_env",
         )
 
 
