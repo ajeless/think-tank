@@ -51,6 +51,8 @@ Intent: run an interactive CLI setup session that helps the user configure Think
 
 Why it exists: first-run setup crosses several config concerns: provider auth metadata, model profiles, and explicit defaults. A top-level guided command lets the user make those choices in one place while keeping work commands scriptable.
 
+Where it is going: `think init` should become the guided surface for official provider-supported auth paths, including local providers, OAuth/device flows, Application Default Credentials, and subscription-backed product integrations when a provider documents them for a compatible client. It must not offer unsupported subscription-token or browser-session workarounds.
+
 Why it is different from hidden defaults: the user is making visible choices during a setup command. Persisting those choices is not the same as Think Tank silently choosing a provider, model, auth method, billing path, or fallback at work-command runtime.
 
 Current status: implemented.
@@ -72,7 +74,7 @@ Rules to preserve:
 
 - Work commands must remain non-interactive.
 - Any default written by setup must be explicit user-authored config, not an invented product default.
-- Subscription-style auth may be offered only through official supported provider paths.
+- Subscription-style auth may be offered only through official supported provider paths, and product-specific subscription paths must not be represented as generic API provider auth.
 - Fallback between auth methods or providers must remain explicit user-authored policy, never automatic recovery.
 
 ### `think new <path> --name <name>`

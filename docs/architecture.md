@@ -124,15 +124,57 @@ Provider config supports multiple auth method records per provider. The current 
 
 `think config auth add` may select among multiple ready auth methods when a provider has more than one implemented method. `--yes` remains deterministic and uses the provider's current primary implemented method. Subscription/OAuth-style methods must not be listed as selectable until they are backed by an official supported provider path.
 
+### Official Subscription Auth Roadmap
+
+Reducing live-testing API cost is a real product goal. `think init` should eventually be the guided setup surface for any official provider-supported subscription, OAuth, local, or cloud auth path that Think Tank can use without becoming a credential middleman.
+
+The implementation gate is strict: an auth path is selectable only after the provider documents it for the kind of client Think Tank is building, and after Think Tank has an implementation that stores no provider secrets in TOML or project state. Browser-cookie scraping, undocumented app-token reuse, private subscription-token extraction, or replaying another app's session files remain out of scope.
+
+Official does not always mean general-purpose. Some providers document subscription-backed auth for a specific first-party coding product, while separately documenting API usage and billing for general API clients. Think Tank should treat those as candidate product-specific integrations, not as proof that the same subscription can be used for arbitrary `provider:model` calls.
+
+Near-term roadmap:
+
+- Track provider-supported auth methods in the provider registry even before all are implemented, but make only implemented ready methods selectable.
+- Let `think init` explain when a provider has a promising official path that is not implemented yet, without presenting it as a choice.
+- Prefer local or subscription-backed official paths for live testing when available, then direct API keys, then aggregators only when explicitly selected.
+- Add fallback policy only as visible user-authored config, never as automatic recovery.
+- Keep `think config validate` as the opt-in boundary for any check that may call a provider or spend credits.
+
+Current research snapshot, as of April 28, 2026:
+
+| Provider/product | Official lower-cost or subscription-relevant path | Think Tank status |
+|---|---|---|
+| OpenAI API | API docs document API-key bearer auth; OpenAI Help says ChatGPT and API billing are separate. | Keep `api_key_env` for general OpenAI API calls. Do not treat ChatGPT Plus/Pro as generic API auth. |
+| OpenAI Codex | OpenAI Help documents ChatGPT sign-in for Codex CLI/IDE/app and says Codex is included with ChatGPT plans. | Candidate separate Codex integration, not a drop-in OpenAI API provider path. Needs design before implementation. |
+| Anthropic API | Anthropic API docs require `x-api-key`; Anthropic Help says paid Claude.ai plans do not include API Console usage. | Keep `api_key_env` for direct Anthropic API calls. Do not treat Claude Pro/Max as generic API auth. |
+| Claude Code | Anthropic/Claude Code docs document Claude.ai subscription OAuth credentials for Claude Code. | Candidate Claude Code or Claude Code SDK integration, not a drop-in Messages API auth path. Needs design before implementation. |
+| Google Gemini / Vertex AI | Google documents API keys, OAuth, and Application Default Credentials. | Prioritize official env/ADC support before inventing any Google-specific secret storage. Cost still belongs to the user's Google project. |
+| Ollama | Local server auth needs no provider account or API key. | Already supported as `local_server`; safest path for cost-free live testing. |
+| OpenRouter | Docs document bearer API keys and account credit limits. | Keep explicit `api_key_env`; useful for budgets/limits but not subscription auth. |
+| Groq | Docs document bearer API keys through OpenAI-compatible endpoints. | Keep explicit `api_key_env`; no subscription path currently documented for Think Tank. |
+
+Research source links for this snapshot:
+
+- OpenAI API authentication: https://platform.openai.com/docs/api-reference/authentication
+- OpenAI ChatGPT/API billing separation: https://help.openai.com/en/articles/9039756
+- OpenAI Codex with ChatGPT plans: https://help.openai.com/en/articles/11369540-codex-in-chatgpt
+- Anthropic API authentication: https://docs.anthropic.com/en/api/getting-started
+- Anthropic Claude.ai/API billing separation: https://support.anthropic.com/en/articles/9876003
+- Claude Code authentication: https://code.claude.com/docs/en/iam
+- Google Gemini OAuth: https://ai.google.dev/gemini-api/docs/oauth
+- Google Vertex AI Application Default Credentials: https://cloud.google.com/vertex-ai/generative-ai/docs/start/gcp-auth
+- OpenRouter API authentication: https://openrouter.ai/docs/api-reference/authentication
+- Groq API docs: https://console.groq.com/docs/
+
 ### Provider Auth Matrix
 
 This matrix captures current direction, not complete implementation.
 
 | Provider | Current/future auth kinds | Notes |
 |---|---|---|
-| OpenAI | `api_key_env`; future official OAuth only if documented for API clients. | ChatGPT subscription access is separate from API billing unless OpenAI exposes an official third-party path. |
-| Anthropic | `api_key_env`; future official OAuth/subscription only if documented for third-party tools. | Claude subscription-token reuse is not an implemented path. |
-| Google / Gemini | `service_account_env`; future `api_key_env` for Gemini API path; possible official OAuth if needed. | Current Google path uses Vertex-style environment credentials. |
+| OpenAI | `api_key_env`; possible future Codex-specific subscription integration. | ChatGPT subscription access is separate from API billing. Codex subscription auth is product-specific and needs separate design. |
+| Anthropic | `api_key_env`; possible future Claude Code-specific subscription integration. | Claude.ai paid plans do not include API Console usage. Claude Code subscription auth is product-specific and needs separate design. |
+| Google / Gemini | `service_account_env`; future `api_key_env` for Gemini API path; possible official OAuth/ADC expansion. | Current Google path uses Vertex-style environment credentials. |
 | Ollama | `local_server`. | No provider subscription or remote billing path. |
 | OpenRouter | `api_key_env`. | Aggregator account credits; do not silently fall back to or from direct provider keys. |
 | Groq | `api_key_env`. | OpenAI-compatible API route with Groq account key. |
