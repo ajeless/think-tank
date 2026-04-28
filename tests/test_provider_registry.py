@@ -15,6 +15,7 @@ def test_detect_provider_statuses_reports_detected_env_var_names_only() -> None:
             "OPENAI_API_KEY": "sk-secret",
             "OPENROUTER_API_KEY": "or-secret",
             "GROQ_API_KEY": "gsk-secret",
+            "GEMINI_API_KEY": "gemini-secret",
             "GOOGLE_PROJECT_ID": "project",
             "GOOGLE_REGION": "us-central1",
         }
@@ -35,6 +36,12 @@ def test_detect_provider_statuses_reports_detected_env_var_names_only() -> None:
     assert groq["detected_env_vars"] == ["GROQ_API_KEY"]
     assert "gsk-secret" not in str(groq)
 
+    gemini = _status(statuses, "gemini")
+    assert gemini["ready"] is True
+    assert gemini["auth_kind"] == "api_key_env"
+    assert gemini["detected_env_vars"] == ["GEMINI_API_KEY"]
+    assert "gemini-secret" not in str(gemini)
+
     google = _status(statuses, "google")
     assert google["ready"] is False
     assert google["auth_kind"] == "service_account_env"
@@ -48,6 +55,15 @@ def test_ollama_is_ready_without_secret() -> None:
     assert ollama["ready"] is True
     assert ollama["auth_kind"] == "local_server"
     assert ollama["detected_env_vars"] == []
+
+
+def test_gemini_requires_one_api_key_env_var() -> None:
+    statuses = detect_provider_statuses({})
+
+    gemini = _status(statuses, "gemini")
+    assert gemini["ready"] is False
+    assert gemini["required_env_vars"] == ["GOOGLE_API_KEY", "GEMINI_API_KEY"]
+    assert gemini["missing_env_vars"] == ["GOOGLE_API_KEY", "GEMINI_API_KEY"]
 
 
 def test_provider_auth_method_options_report_ready_methods_without_secrets(

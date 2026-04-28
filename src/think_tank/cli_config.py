@@ -31,7 +31,12 @@ def config_doctor(
         typer.echo(json.dumps(statuses, indent=2, sort_keys=True))
         return
 
-    for status in statuses:
+    visible_statuses = [
+        status
+        for status in statuses
+        if status["ready"] or status["detected_env_vars"]
+    ]
+    for status in visible_statuses:
         console.print(
             f"{status['display_name']}: "
             f"ready={'yes' if status['ready'] else 'no'}; "
@@ -40,6 +45,8 @@ def config_doctor(
         )
         for note in status["notes"]:
             console.print(f"  note: {note}")
+    if not visible_statuses:
+        console.print("No provider credential environment variables detected.")
     console.print("Secrets are read from environment variables and are never printed.")
 
 

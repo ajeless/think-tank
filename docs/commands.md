@@ -99,8 +99,10 @@ Current status: implemented.
 
 Current behavior:
 
-- Detects provider environment variable names for OpenAI, Anthropic, Google Vertex AI, Ollama, OpenRouter, and Groq.
-- Reports missing required environment variable names.
+- Detects provider environment variable names for OpenAI, Anthropic, Gemini, Google Vertex AI, Ollama, OpenRouter, and Groq.
+- Human-readable output reports ready providers and partially configured providers.
+- Human-readable output does not warn about entirely unconfigured providers.
+- JSON output reports all packaged providers, including missing required environment variable names.
 - Prints env var names only, never env var values.
 - Supports `--json` for machine-readable output.
 - Does not make provider API calls.
@@ -280,10 +282,15 @@ Packaged providers:
 
 - `openai:<model>`
 - `anthropic:<model>`
+- `gemini:<model>`
 - `google:<model>`
 - `ollama:<model>`
 - `openrouter:<model>`
 - `groq:<model>`
+
+`gemini:<model>` is the Gemini Developer API key path and uses `GEMINI_API_KEY` or `GOOGLE_API_KEY`. It does not require Vertex project or service-account credentials.
+
+`google:<model>` is the Google Vertex AI path and uses Vertex-style credentials.
 
 `openrouter:<model>` and `groq:<model>` are Think Tank adapter conventions for those providers' OpenAI-compatible APIs. The installed aisuite version does not expose first-class providers for those routes.
 

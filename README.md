@@ -119,7 +119,8 @@ Packaged model-provider support currently includes:
 
 - OpenAI: `openai:<model>` with `OPENAI_API_KEY`.
 - Anthropic: `anthropic:<model>` with `ANTHROPIC_API_KEY`.
-- Google: `google:<model>` with Google/Vertex credentials supported by aisuite.
+- Gemini: `gemini:<model>` with `GEMINI_API_KEY` or `GOOGLE_API_KEY`.
+- Google Vertex AI: `google:<model>` with Google/Vertex credentials supported by aisuite.
 - Ollama: `ollama:<model>` with a local Ollama server, defaulting to `http://localhost:11434`.
 - OpenRouter: `openrouter:<model>` with `OPENROUTER_API_KEY`, routed through OpenRouter's OpenAI-compatible API.
 - Groq: `groq:<model>` with `GROQ_API_KEY`, routed through Groq's OpenAI-compatible API.

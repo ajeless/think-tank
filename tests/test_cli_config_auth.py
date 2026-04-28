@@ -14,6 +14,8 @@ def test_cli_config_auth_list_reports_metadata_without_secret_values() -> None:
             env={
                 "OPENAI_API_KEY": "sk-secret",
                 "ANTHROPIC_API_KEY": "",
+                "GEMINI_API_KEY": "",
+                "GOOGLE_API_KEY": "",
                 "GROQ_API_KEY": "gsk-secret",
                 "OPENROUTER_API_KEY": "",
             },
@@ -36,6 +38,8 @@ def test_cli_config_auth_doctor_reports_detection_without_config() -> None:
             env={
                 "OPENAI_API_KEY": "",
                 "ANTHROPIC_API_KEY": "",
+                "GEMINI_API_KEY": "",
+                "GOOGLE_API_KEY": "",
                 "GROQ_API_KEY": "gsk-secret",
                 "OPENROUTER_API_KEY": "",
             },
@@ -95,6 +99,8 @@ def test_cli_config_auth_list_json_reports_metadata_without_secret_values() -> N
             env={
                 "OPENAI_API_KEY": "",
                 "ANTHROPIC_API_KEY": "",
+                "GEMINI_API_KEY": "",
+                "GOOGLE_API_KEY": "",
                 "GROQ_API_KEY": "gsk-secret",
                 "OPENROUTER_API_KEY": "",
             },
@@ -164,23 +170,22 @@ def test_cli_config_auth_methods_reports_capabilities_without_secret_values() ->
 def test_cli_config_auth_methods_json_reports_all_capabilities_without_secrets() -> None:
     result = runner.invoke(
         app,
-        ["config", "auth", "methods", "--provider", "google", "--json"],
+        ["config", "auth", "methods", "--provider", "gemini", "--json"],
         env={
-            "GOOGLE_PROJECT_ID": "project",
-            "GOOGLE_REGION": "us-central1",
-            "GOOGLE_APPLICATION_CREDENTIALS": "credentials.json",
             "GEMINI_API_KEY": "gemini-secret",
+            "GOOGLE_API_KEY": "",
         },
     )
 
     assert result.exit_code == 0
     payload = json.loads(result.output)
-    assert payload["providers"][0]["provider"] == "google"
+    assert payload["providers"][0]["provider"] == "gemini"
     methods = payload["providers"][0]["auth_methods"]
-    service_account = _auth_method(methods, "service_account_env")
-    assert service_account["ready"] is True
-    assert service_account["selectable"] is True
-    assert [method["auth_kind"] for method in methods] == ["service_account_env"]
+    api_key = _auth_method(methods, "api_key_env")
+    assert api_key["ready"] is True
+    assert api_key["selectable"] is True
+    assert api_key["required_env_vars"] == ["GOOGLE_API_KEY", "GEMINI_API_KEY"]
+    assert api_key["detected_env_vars"] == ["GEMINI_API_KEY"]
     assert "gemini-secret" not in result.output
 
 
@@ -369,6 +374,8 @@ def test_cli_config_auth_remove_updates_config_without_touching_secrets() -> Non
             env={
                 "OPENAI_API_KEY": "sk-secret",
                 "ANTHROPIC_API_KEY": "",
+                "GEMINI_API_KEY": "",
+                "GOOGLE_API_KEY": "",
                 "GROQ_API_KEY": "gsk-secret",
                 "OPENROUTER_API_KEY": "",
             },

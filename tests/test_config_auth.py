@@ -140,6 +140,7 @@ def test_list_provider_auth_methods_reports_all_packaged_providers() -> None:
         "openai",
         "anthropic",
         "google",
+        "gemini",
         "ollama",
         "openrouter",
         "groq",
@@ -180,6 +181,30 @@ def test_add_config_auth_creates_config_for_ready_env_provider(tmp_path: Path) -
             "env_vars": ["OPENAI_API_KEY"],
         }
     ]
+
+
+def test_add_config_auth_supports_gemini_api_key_env(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+
+    result = add_config_auth(
+        config_path,
+        "gemini",
+        env={"GEMINI_API_KEY": "gemini-secret"},
+    )
+
+    assert result == {
+        "config_path": str(config_path),
+        "provider": "gemini",
+        "added": True,
+        "auth_kind": "api_key_env",
+        "env_vars": ["GEMINI_API_KEY"],
+        "enabled_providers": ["gemini"],
+    }
+    raw_config = config_path.read_text(encoding="utf-8")
+    assert "gemini-secret" not in raw_config
+    assert "GEMINI_API_KEY" in raw_config
+    parsed = load_config(config_path)
+    assert parsed["providers"]["gemini"]["auth_kind"] == "api_key_env"
 
 
 def test_add_config_auth_can_select_supported_auth_kind(

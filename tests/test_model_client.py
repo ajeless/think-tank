@@ -39,6 +39,20 @@ class FakeAisuiteClient:
         self.chat = SimpleNamespace(completions=self.completions)
 
 
+class FakeGeminiModels:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    def generate_content(self, *, model, contents, config=None):
+        self.calls.append({"model": model, "contents": contents, "config": config})
+        return SimpleNamespace(text="gemini ok")
+
+
+class FakeGeminiClient:
+    def __init__(self) -> None:
+        self.models = FakeGeminiModels()
+
+
 class FailingCompletions:
     def __init__(self, message: str = "quota failed") -> None:
         self.message = message
@@ -124,6 +138,63 @@ def test_aisuite_model_client_routes_groq_to_openai_compatible_provider() -> Non
             "messages": [{"role": "user", "content": "Hello"}],
         }
     ]
+
+
+def test_aisuite_model_client_routes_gemini_to_developer_api(
+) -> None:
+    fake_gemini_client = FakeGeminiClient()
+    client = AisuiteModelClient(gemini_client=fake_gemini_client)
+    response = client.complete(
+        model="gemini:gemini-3.1-pro-preview",
+        messages=[
+            {"role": "system", "content": "System rules"},
+            {"role": "user", "content": "Hello"},
+        ],
+    )
+
+    assert response.content == "gemini ok"
+    assert fake_gemini_client.models.calls[0]["model"] == "gemini-3.1-pro-preview"
+    contents = fake_gemini_client.models.calls[0]["contents"]
+    assert len(contents) == 1
+    assert contents[0].role == "user"
+    assert contents[0].parts[0].text == "Hello"
+    config = fake_gemini_client.models.calls[0]["config"]
+    assert config.system_instruction == "System rules"
+
+
+def test_gemini_client_prefers_google_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str | None] = []
+
+    def fake_genai_client(*, api_key):
+        calls.append(api_key)
+        return FakeGeminiClient()
+
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-secret")
+    monkeypatch.setenv("GOOGLE_API_KEY", "google-secret")
+    monkeypatch.setattr(
+        "google.genai.Client",
+        fake_genai_client,
+    )
+
+    AisuiteModelClient().complete(
+        model="gemini:gemini-3.1-pro-preview",
+        messages=[{"role": "user", "content": "Hello"}],
+    )
+
+    assert calls == ["google-secret"]
+
+
+def test_gemini_client_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+
+    with pytest.raises(ModelClientConfigurationError, match="GOOGLE_API_KEY"):
+        AisuiteModelClient().complete(
+            model="gemini:gemini-3.1-pro-preview",
+            messages=[{"role": "user", "content": "Hello"}],
+        )
 
 
 def test_openrouter_client_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:

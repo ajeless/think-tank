@@ -109,10 +109,27 @@ class OllamaHttpModelRegistry:
 class AisuiteModelClient:
     """aisuite-backed implementation of the model client boundary."""
 
-    def __init__(self, client: Any | None = None) -> None:
+    def __init__(
+        self,
+        client: Any | None = None,
+        gemini_client: Any | None = None,
+    ) -> None:
         self._client = client
+        self._gemini_client = gemini_client
 
     def complete(self, *, model: str, messages: list[ModelMessage]) -> ModelResponse:
+        if model.startswith("gemini:"):
+            try:
+                return _complete_gemini(
+                    client=self._gemini_client or _new_gemini_client(),
+                    model=model,
+                    messages=messages,
+                )
+            except ModelClientConfigurationError:
+                raise
+            except Exception as exc:
+                raise _provider_call_error("gemini", exc) from exc
+
         client, provider_model = self._client_and_model(model)
         try:
             response = client.chat.completions.create(
@@ -165,6 +182,82 @@ def _new_groq_client() -> Any:
         api_key_env_var="GROQ_API_KEY",
         base_url=GROQ_BASE_URL,
     )
+
+
+def _new_gemini_client() -> Any:
+    api_key = _gemini_api_key(os.environ)
+    if not api_key:
+        raise ModelClientConfigurationError(
+            "Gemini requires GOOGLE_API_KEY or GEMINI_API_KEY in the environment."
+        )
+    try:
+        from google import genai
+    except ImportError as exc:
+        raise ModelClientConfigurationError(
+            "Gemini requires the google-genai package."
+        ) from exc
+    return genai.Client(api_key=api_key)
+
+
+def _complete_gemini(
+    *,
+    client: Any,
+    model: str,
+    messages: list[ModelMessage],
+) -> ModelResponse:
+    provider_model = model.split(":", 1)[1].strip()
+    if not provider_model:
+        raise ModelClientConfigurationError(
+            "Gemini requires a model name after gemini:."
+        )
+    try:
+        from google.genai import types
+    except ImportError as exc:
+        raise ModelClientConfigurationError(
+            "Gemini requires the google-genai package."
+        ) from exc
+
+    response = client.models.generate_content(
+        model=provider_model,
+        contents=_gemini_contents(messages, types=types),
+        config=_gemini_config(messages, types=types),
+    )
+    return ModelResponse(content=_gemini_response_text(response))
+
+
+def _gemini_api_key(env: Mapping[str, str]) -> str | None:
+    return env.get("GOOGLE_API_KEY") or env.get("GEMINI_API_KEY")
+
+
+def _gemini_contents(messages: list[ModelMessage], *, types: Any) -> list[Any]:
+    contents: list[Any] = []
+    for message in messages:
+        role = message["role"]
+        if role == "system":
+            continue
+        contents.append(
+            types.Content(
+                role="model" if role == "assistant" else "user",
+                parts=[types.Part.from_text(text=message["content"])],
+            )
+        )
+    return contents
+
+
+def _gemini_config(messages: list[ModelMessage], *, types: Any) -> Any | None:
+    system_text = "\n\n".join(
+        message["content"] for message in messages if message["role"] == "system"
+    )
+    if not system_text:
+        return None
+    return types.GenerateContentConfig(systemInstruction=system_text)
+
+
+def _gemini_response_text(response: Any) -> str:
+    text = getattr(response, "text", None)
+    if not isinstance(text, str) or not text:
+        raise RuntimeError("Gemini API returned no text content.")
+    return text
 
 
 def _new_openai_compatible_client(
