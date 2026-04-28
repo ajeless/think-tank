@@ -186,7 +186,7 @@ def _selected_auth_kind_for_auth_add(
     env: dict[str, str],
 ) -> str | None:
     options = provider_auth_method_options(provider, env=env)
-    ready_options = [option for option in options if option["ready"]]
+    ready_options = [option for option in options if option["selectable"]]
 
     if len(ready_options) > 1:
         selected = questionary.select(

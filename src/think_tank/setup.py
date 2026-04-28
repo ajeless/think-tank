@@ -160,6 +160,10 @@ def _ready_auth_option(
 ) -> dict[str, object]:
     for option in provider_auth_method_options(provider, env=env):
         if option["auth_kind"] == auth_kind:
+            if not option["implemented"]:
+                raise ProviderAuthNotReadyError(
+                    f"auth kind for {provider} is not implemented yet: {auth_kind}"
+                )
             if option["missing_env_vars"]:
                 raise ProviderAuthNotReadyError(
                     "missing required environment variable(s): "

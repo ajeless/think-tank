@@ -10,6 +10,10 @@ class ProviderStatus(TypedDict):
     provider: str
     display_name: str
     ready: bool
+    implemented: bool
+    official: bool
+    selectable: bool
+    support_status: str
     auth_kind: str
     detected_env_vars: list[str]
     required_env_vars: list[str]
@@ -22,6 +26,10 @@ class ProviderAuthMethodOption(TypedDict):
     display_name: str
     auth_kind: str
     ready: bool
+    implemented: bool
+    official: bool
+    selectable: bool
+    support_status: str
     detected_env_vars: list[str]
     required_env_vars: list[str]
     missing_env_vars: list[str]
@@ -33,6 +41,8 @@ class ProviderAuthMethodSpec:
     auth_kind: str
     env_vars: tuple[str, ...] = ()
     required_env_vars: tuple[str, ...] = ()
+    implemented: bool = True
+    official: bool = True
     notes: tuple[str, ...] = ()
 
 
@@ -57,7 +67,16 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
                 env_vars=("OPENAI_API_KEY",),
                 required_env_vars=("OPENAI_API_KEY",),
                 notes=(
-                    "Subscription login is not implemented; use an environment API key.",
+                    "ChatGPT subscription login is not a generic OpenAI API auth path.",
+                    "Use an environment API key for general OpenAI API calls.",
+                ),
+            ),
+            ProviderAuthMethodSpec(
+                auth_kind="subscription_official",
+                implemented=False,
+                notes=(
+                    "Planned Codex-specific subscription integration only.",
+                    "Not selectable for general OpenAI API calls.",
                 ),
             ),
         ),
@@ -71,7 +90,16 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
                 env_vars=("ANTHROPIC_API_KEY",),
                 required_env_vars=("ANTHROPIC_API_KEY",),
                 notes=(
-                    "Subscription login is not implemented; use an environment API key.",
+                    "Claude.ai subscription login is not a generic Anthropic API auth path.",
+                    "Use an environment API key for direct Anthropic API calls.",
+                ),
+            ),
+            ProviderAuthMethodSpec(
+                auth_kind="subscription_official",
+                implemented=False,
+                notes=(
+                    "Planned Claude Code-specific subscription integration only.",
+                    "Not selectable for direct Anthropic API calls.",
                 ),
             ),
         ),
@@ -81,7 +109,7 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
         display_name="Google Vertex AI",
         auth_methods=(
             ProviderAuthMethodSpec(
-                auth_kind="vertex_env",
+                auth_kind="service_account_env",
                 env_vars=(
                     "GOOGLE_PROJECT_ID",
                     "GOOGLE_REGION",
@@ -97,6 +125,21 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
                 notes=(
                     "The current aisuite Google provider uses Vertex AI credentials.",
                     "GEMINI_API_KEY and GOOGLE_API_KEY are detected but not used by this provider path yet.",
+                ),
+            ),
+            ProviderAuthMethodSpec(
+                auth_kind="api_key_env",
+                env_vars=("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+                implemented=False,
+                notes=(
+                    "Planned Gemini API-key path; current Google provider path uses Vertex AI credentials.",
+                ),
+            ),
+            ProviderAuthMethodSpec(
+                auth_kind="official_oauth",
+                implemented=False,
+                notes=(
+                    "Planned official OAuth or ADC expansion; no token storage is implemented.",
                 ),
             ),
         ),
@@ -190,10 +233,15 @@ def _provider_status(spec: ProviderSpec, env: Mapping[str, str]) -> ProviderStat
     method = provider_auth_method_specs(spec)[0]
     detected = [name for name in method.env_vars if env.get(name)]
     missing = [name for name in method.required_env_vars if not env.get(name)]
+    ready = method.implemented and not missing
     return {
         "provider": spec.name,
         "display_name": spec.display_name,
-        "ready": not missing,
+        "ready": ready,
+        "implemented": method.implemented,
+        "official": method.official,
+        "selectable": ready,
+        "support_status": _support_status(method),
         "auth_kind": method.auth_kind,
         "detected_env_vars": detected,
         "required_env_vars": list(method.required_env_vars),
@@ -209,13 +257,26 @@ def _provider_auth_method_option(
 ) -> ProviderAuthMethodOption:
     detected = [name for name in method.env_vars if env.get(name)]
     missing = [name for name in method.required_env_vars if not env.get(name)]
+    ready = method.implemented and not missing
     return {
         "provider": spec.name,
         "display_name": spec.display_name,
         "auth_kind": method.auth_kind,
-        "ready": not missing,
+        "ready": ready,
+        "implemented": method.implemented,
+        "official": method.official,
+        "selectable": ready,
+        "support_status": _support_status(method),
         "detected_env_vars": detected,
         "required_env_vars": list(method.required_env_vars),
         "missing_env_vars": missing,
         "notes": list(method.notes),
     }
+
+
+def _support_status(method: ProviderAuthMethodSpec) -> str:
+    if method.implemented:
+        return "implemented"
+    if method.official:
+        return "planned_official"
+    return "unsupported"

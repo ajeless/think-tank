@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from think_tank.cli import app
+from think_tank.cli import _init_auth_path_choices, app
 from think_tank.workspace import init_workspace
 
 from cli_helpers import FakeQuestionaryResponse, runner
@@ -113,6 +113,29 @@ def test_cli_init_can_skip_model_profile(monkeypatch) -> None:
     assert "Enabled auth paths: ollama:local_server" in result.output
     assert "Model profile:" not in result.output
     assert "[defaults]" not in config_text
+
+
+def test_cli_init_auth_choices_show_planned_official_paths_as_disabled(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-secret")
+
+    choices = _init_auth_path_choices()
+    values = [choice.value for choice in choices]
+
+    assert {"provider": "openai", "auth_kind": "api_key_env"} in values
+    planned_choice = next(
+        choice
+        for choice in choices
+        if choice.value == {
+            "provider": "openai",
+            "auth_kind": "subscription_official",
+        }
+    )
+    assert planned_choice.checked is False
+    assert planned_choice.disabled == "official path tracked, not implemented yet"
+    assert "planned official path" in planned_choice.title
+    assert "sk-secret" not in str(choices)
 
 
 def test_cli_init_can_set_existing_profile_as_default(monkeypatch) -> None:
