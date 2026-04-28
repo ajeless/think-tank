@@ -65,8 +65,8 @@ Current behavior:
 - Writes `~/.config/think-tank/config.toml` by default, or `--config <path>`.
 - Stores provider names, auth kinds, env var names, and auth method records only.
 - Does not store API keys, bearer tokens, refresh tokens, subscription tokens, browser cookies, provider session dumps, or provider secret values.
-- May prompt for a named model profile from a user-entered `provider:model` string.
-- May set that profile as an explicit default model profile.
+- May prompt for named model profiles from user-entered `provider:model` strings.
+- May set one explicit default model profile after profile setup, selected from existing and newly created profiles.
 - Does not validate provider credentials, call provider APIs, or hit the network.
 - Does not make `think ask` or any other work command use defaults automatically.
 
