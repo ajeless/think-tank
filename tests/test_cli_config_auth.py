@@ -145,6 +145,61 @@ def test_cli_config_auth_list_reports_missing_config() -> None:
     assert "Traceback" not in result.output
 
 
+def test_cli_config_auth_methods_reports_capabilities_without_secret_values() -> None:
+    result = runner.invoke(
+        app,
+        ["config", "auth", "methods", "--provider", "openai"],
+        env={"OPENAI_API_KEY": "sk-secret"},
+    )
+
+    assert result.exit_code == 0
+    assert "OpenAI (openai):" in result.output
+    assert "api_key_env: status=implemented" in result.output
+    assert "selectable=yes" in result.output
+    assert "detected_env_vars=OPENAI_API_KEY" in result.output
+    assert "subscription_official: status=planned_official" in result.output
+    assert "implemented=no" in result.output
+    assert "selectable=no" in result.output
+    assert "sk-secret" not in result.output
+
+
+def test_cli_config_auth_methods_json_reports_all_capabilities_without_secrets() -> None:
+    result = runner.invoke(
+        app,
+        ["config", "auth", "methods", "--provider", "google", "--json"],
+        env={
+            "GOOGLE_PROJECT_ID": "project",
+            "GOOGLE_REGION": "us-central1",
+            "GOOGLE_APPLICATION_CREDENTIALS": "credentials.json",
+            "GEMINI_API_KEY": "gemini-secret",
+        },
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["providers"][0]["provider"] == "google"
+    methods = payload["providers"][0]["auth_methods"]
+    service_account = _auth_method(methods, "service_account_env")
+    assert service_account["ready"] is True
+    assert service_account["selectable"] is True
+    gemini_api_key = _auth_method(methods, "api_key_env")
+    assert gemini_api_key["support_status"] == "planned_official"
+    assert gemini_api_key["ready"] is False
+    assert gemini_api_key["selectable"] is False
+    assert "gemini-secret" not in result.output
+
+
+def test_cli_config_auth_methods_reports_unknown_provider_without_traceback() -> None:
+    result = runner.invoke(
+        app,
+        ["config", "auth", "methods", "--provider", "futureai"],
+    )
+
+    assert result.exit_code != 0
+    assert "unknown provider: futureai" in result.output
+    assert "Traceback" not in result.output
+
+
 def test_cli_config_auth_add_yes_creates_config_without_secret_values() -> None:
     with runner.isolated_filesystem():
         result = runner.invoke(
@@ -368,3 +423,7 @@ def test_cli_config_auth_remove_is_idempotent_for_absent_provider() -> None:
 
 def _doctor_provider(payload, provider: str):
     return next(item for item in payload["providers"] if item["provider"] == provider)
+
+
+def _auth_method(methods, auth_kind: str):
+    return next(method for method in methods if method["auth_kind"] == auth_kind)

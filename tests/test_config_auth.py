@@ -7,6 +7,7 @@ from think_tank.config_auth import (
     add_config_auth,
     doctor_config_auth,
     list_config_auth,
+    list_provider_auth_methods,
     remove_config_auth,
     write_detected_provider_config,
 )
@@ -106,6 +107,54 @@ def test_list_config_auth_returns_enabled_provider_metadata(tmp_path: Path) -> N
 def test_list_config_auth_requires_existing_config(tmp_path: Path) -> None:
     with pytest.raises(ConfigNotFoundError, match="config not found"):
         list_config_auth(tmp_path / "missing.toml")
+
+
+def test_list_provider_auth_methods_reports_capabilities_without_secrets() -> None:
+    result = list_provider_auth_methods(
+        env={
+            "OPENAI_API_KEY": "sk-secret",
+            "GEMINI_API_KEY": "gemini-secret",
+        },
+        provider="openai",
+    )
+
+    assert result["providers"][0]["provider"] == "openai"
+    methods = result["providers"][0]["auth_methods"]
+    api_key = _auth_method(methods, "api_key_env")
+    assert api_key["implemented"] is True
+    assert api_key["official"] is True
+    assert api_key["ready"] is True
+    assert api_key["selectable"] is True
+    assert api_key["support_status"] == "implemented"
+    assert api_key["detected_env_vars"] == ["OPENAI_API_KEY"]
+
+    subscription = _auth_method(methods, "subscription_official")
+    assert subscription["implemented"] is False
+    assert subscription["official"] is True
+    assert subscription["ready"] is False
+    assert subscription["selectable"] is False
+    assert subscription["support_status"] == "planned_official"
+
+    assert "sk-secret" not in str(result)
+    assert "gemini-secret" not in str(result)
+
+
+def test_list_provider_auth_methods_reports_all_packaged_providers() -> None:
+    result = list_provider_auth_methods(env={})
+
+    assert [provider["provider"] for provider in result["providers"]] == [
+        "openai",
+        "anthropic",
+        "google",
+        "ollama",
+        "openrouter",
+        "groq",
+    ]
+
+
+def test_list_provider_auth_methods_rejects_unknown_provider() -> None:
+    with pytest.raises(ValueError, match="unknown provider: futureai"):
+        list_provider_auth_methods(env={}, provider="futureai")
 
 
 def test_add_config_auth_creates_config_for_ready_env_provider(tmp_path: Path) -> None:
@@ -521,3 +570,7 @@ def test_remove_config_auth_is_idempotent_for_absent_provider(tmp_path: Path) ->
 
 def _doctor_provider(result, provider: str):
     return next(item for item in result["providers"] if item["provider"] == provider)
+
+
+def _auth_method(methods, auth_kind: str):
+    return next(method for method in methods if method["auth_kind"] == auth_kind)
