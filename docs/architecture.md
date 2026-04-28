@@ -21,6 +21,8 @@ CLI handlers should:
 - Call engine functions.
 - Convert engine results or errors into terminal output and exit codes.
 
+The installed CLI entrypoint is assembled in `think_tank.cli`, but command groups may live in focused CLI modules. Root work commands stay in the root CLI module for now; config command groups live beside it in dedicated modules so interactive setup flows can grow without turning the entrypoint into a behavior owner.
+
 ## Model Call Boundary
 
 Model calls are engine behavior behind a testable client boundary. The engine owns loading project state, assembling the model messages, receiving structured response data from a model client, and writing durable transcript records. The CLI chooses no behavior beyond parsing command input and selecting the concrete client adapter.
