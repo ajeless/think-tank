@@ -112,7 +112,7 @@ def test_provider_auth_method_options_report_ready_methods_without_secrets(
     assert "secret-key" not in str(options)
 
 
-def test_provider_auth_method_options_include_planned_official_paths() -> None:
+def test_packaged_provider_auth_method_options_exclude_deferred_subscription_paths() -> None:
     options = provider_auth_method_options("openai", env={"OPENAI_API_KEY": "sk-secret"})
 
     api_key = _option(options, "api_key_env")
@@ -121,14 +121,45 @@ def test_provider_auth_method_options_include_planned_official_paths() -> None:
     assert api_key["ready"] is True
     assert api_key["selectable"] is True
     assert api_key["support_status"] == "implemented"
-
-    subscription = _option(options, "subscription_official")
-    assert subscription["implemented"] is False
-    assert subscription["official"] is True
-    assert subscription["ready"] is False
-    assert subscription["selectable"] is False
-    assert subscription["support_status"] == "planned_official"
+    assert "subscription_official" not in [
+        option["auth_kind"] for option in options
+    ]
     assert "sk-secret" not in str(options)
+
+
+def test_provider_auth_method_options_can_report_unimplemented_official_paths(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "think_tank.provider_registry.PROVIDER_SPECS",
+        (
+            ProviderSpec(
+                name="testai",
+                display_name="Test AI",
+                auth_methods=(
+                    ProviderAuthMethodSpec(
+                        auth_kind="api_key_env",
+                        env_vars=("TESTAI_API_KEY",),
+                        required_env_vars=("TESTAI_API_KEY",),
+                    ),
+                    ProviderAuthMethodSpec(
+                        auth_kind="future_api_key_env",
+                        env_vars=("TESTAI_NEXT_KEY",),
+                        implemented=False,
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    options = provider_auth_method_options("testai", env={})
+
+    future = _option(options, "future_api_key_env")
+    assert future["implemented"] is False
+    assert future["official"] is True
+    assert future["ready"] is False
+    assert future["selectable"] is False
+    assert future["support_status"] == "planned_official"
 
 
 def test_provider_env_var_names_deduplicates_auth_method_env_vars() -> None:

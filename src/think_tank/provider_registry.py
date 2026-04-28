@@ -67,16 +67,8 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
                 env_vars=("OPENAI_API_KEY",),
                 required_env_vars=("OPENAI_API_KEY",),
                 notes=(
-                    "ChatGPT subscription login is not a generic OpenAI API auth path.",
                     "Use an environment API key for general OpenAI API calls.",
-                ),
-            ),
-            ProviderAuthMethodSpec(
-                auth_kind="subscription_official",
-                implemented=False,
-                notes=(
-                    "Planned Codex-specific subscription integration only.",
-                    "Not selectable for general OpenAI API calls.",
+                    "ChatGPT subscription login is out of scope for provider auth.",
                 ),
             ),
         ),
@@ -90,16 +82,8 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
                 env_vars=("ANTHROPIC_API_KEY",),
                 required_env_vars=("ANTHROPIC_API_KEY",),
                 notes=(
-                    "Claude.ai subscription login is not a generic Anthropic API auth path.",
                     "Use an environment API key for direct Anthropic API calls.",
-                ),
-            ),
-            ProviderAuthMethodSpec(
-                auth_kind="subscription_official",
-                implemented=False,
-                notes=(
-                    "Planned Claude Code-specific subscription integration only.",
-                    "Not selectable for direct Anthropic API calls.",
+                    "Claude.ai subscription login is out of scope for provider auth.",
                 ),
             ),
         ),
@@ -125,21 +109,6 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
                 notes=(
                     "The current aisuite Google provider uses Vertex AI credentials.",
                     "GEMINI_API_KEY and GOOGLE_API_KEY are detected but not used by this provider path yet.",
-                ),
-            ),
-            ProviderAuthMethodSpec(
-                auth_kind="api_key_env",
-                env_vars=("GEMINI_API_KEY", "GOOGLE_API_KEY"),
-                implemented=False,
-                notes=(
-                    "Planned Gemini API-key path; current Google provider path uses Vertex AI credentials.",
-                ),
-            ),
-            ProviderAuthMethodSpec(
-                auth_kind="official_oauth",
-                implemented=False,
-                notes=(
-                    "Planned official OAuth or ADC expansion; no token storage is implemented.",
                 ),
             ),
         ),

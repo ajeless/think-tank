@@ -211,10 +211,7 @@ def _init_auth_path_choices() -> list[questionary.Choice]:
     choices: list[questionary.Choice] = []
     for status in detect_provider_statuses(os.environ):
         for option in provider_auth_method_options(status["provider"], env=os.environ):
-            if (
-                not option["selectable"]
-                and option["support_status"] != "planned_official"
-            ):
+            if not option["selectable"]:
                 continue
             choices.append(
                 questionary.Choice(
@@ -224,9 +221,7 @@ def _init_auth_path_choices() -> list[questionary.Choice]:
                         "auth_kind": option["auth_kind"],
                     },
                     checked=option["selectable"],
-                    disabled=None
-                    if option["selectable"]
-                    else "official path tracked, not implemented yet",
+                    disabled=None,
                 )
             )
     return choices
@@ -235,11 +230,6 @@ def _init_auth_path_choices() -> list[questionary.Choice]:
 def _init_auth_path_choice_title(option: dict[str, object]) -> str:
     env_vars = option.get("detected_env_vars", [])
     env_text = ", ".join(env_vars) if isinstance(env_vars, list) and env_vars else "-"
-    if option.get("support_status") == "planned_official":
-        return (
-            f"{option['display_name']} ({option['provider']}) - "
-            f"{option['auth_kind']}; planned official path, not implemented"
-        )
     return (
         f"{option['display_name']} ({option['provider']}) - "
         f"{option['auth_kind']}; env vars: {env_text}"

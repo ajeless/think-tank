@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from think_tank.config_store import load_config
+from think_tank.provider_registry import ProviderAuthMethodSpec, ProviderSpec
 from think_tank.setup import initialize_setup
 
 
@@ -110,13 +111,38 @@ def test_initialize_setup_rejects_duplicate_provider_auth_paths(
         )
 
 
-def test_initialize_setup_rejects_planned_official_auth_path(tmp_path: Path) -> None:
+def test_initialize_setup_rejects_unimplemented_auth_path(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "think_tank.provider_registry.PROVIDER_SPECS",
+        (
+            ProviderSpec(
+                name="testai",
+                display_name="Test AI",
+                auth_methods=(
+                    ProviderAuthMethodSpec(
+                        auth_kind="api_key_env",
+                        env_vars=("TESTAI_API_KEY",),
+                        required_env_vars=("TESTAI_API_KEY",),
+                    ),
+                    ProviderAuthMethodSpec(
+                        auth_kind="future_api_key_env",
+                        env_vars=("TESTAI_NEXT_KEY",),
+                        implemented=False,
+                    ),
+                ),
+            ),
+        ),
+    )
+
     with pytest.raises(ValueError, match="not implemented yet"):
         initialize_setup(
             tmp_path / "config.toml",
-            env={"OPENAI_API_KEY": "sk-secret"},
+            env={"TESTAI_API_KEY": "secret-key"},
             auth_selections=[
-                {"provider": "openai", "auth_kind": "subscription_official"},
+                {"provider": "testai", "auth_kind": "future_api_key_env"},
             ],
         )
 
