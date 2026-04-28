@@ -2,7 +2,7 @@
 
 Think Tank is a local-first idea workspace where a human and multiple AI agents develop ideas into durable, searchable, versioned artifacts.
 
-This repository is being bootstrapped incrementally. The current implementation provides the Python package, CLI entrypoint, test harness, local workspace creation, provider credential diagnostics, explicit provider validation, and a minimal one-model `ask` path that records transcripts.
+This repository is being bootstrapped incrementally. The current implementation provides the Python package, CLI entrypoint, test harness, local workspace creation, provider credential diagnostics, explicit provider validation, named model profiles, and a minimal one-model `ask` path that records transcripts.
 
 ## Design Notes
 
@@ -21,6 +21,13 @@ Ask one explicitly selected model a question inside that workspace:
 
 ```bash
 think ask "What should we evaluate first?" --project ./my-idea --model openai:gpt-4o
+```
+
+Or use a named model profile that you configured explicitly:
+
+```bash
+think config model add fast --model groq:llama-3.1-8b-instant
+think ask "What should we evaluate first?" --project ./my-idea --model-profile fast
 ```
 
 From a source checkout during development, run the installed command through `uv`:
@@ -51,6 +58,14 @@ think config auth list
 think config auth remove groq
 ```
 
+Add, list, or remove named model profiles:
+
+```bash
+think config model add fast --model groq:llama-3.1-8b-instant
+think config model list
+think config model remove fast
+```
+
 Explicitly validate real provider credentials and one selected model:
 
 ```bash
@@ -76,6 +91,8 @@ my-idea/
 `state.json` starts with `schema_version: 1`, user-supplied project metadata, and intentionally empty top-level collections for the project state.
 
 `think ask` loads the project `state.json` as read-only context, calls the requested `provider:model`, prints the model response, and appends the raw interaction to `transcripts/ask.jsonl`. It does not synthesize, mutate project state, choose default models, run multiple agents, or commit to git.
+
+`think config model add <name> --model <provider:model>` stores a user-named model profile in non-secret config. `think ask` can use that profile with `--model-profile <name>`. Model profiles are explicit user choices; Think Tank still does not store or choose a default model, and it does not create fallback policies.
 
 `think config validate` is an explicit opt-in diagnostic for real provider access. It may call provider APIs with a tiny validation prompt, so it is never run by `doctor`, `init`, or work commands by default. It reports success, missing credentials, authentication failures, quota or rate limits, provider SDK/configuration issues, and generic provider failures without printing secret values. For Ollama, it checks the local server and verifies that the requested model is installed. It does not write transcripts, mutate project state, choose fallback models, or store secrets.
 

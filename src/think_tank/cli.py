@@ -14,13 +14,18 @@ from rich.console import Console
 from .config import (
     ConfigFormatError,
     ConfigNotFoundError,
+    ModelProfileNotFoundError,
     ProviderAuthNotReadyError,
     add_config_auth,
+    add_model_profile,
     default_config_path,
     detect_provider_statuses,
     doctor_config_auth,
     list_config_auth,
+    list_model_profiles,
     remove_config_auth,
+    remove_model_profile,
+    resolve_model_profile,
     write_detected_provider_config,
 )
 from .engine import (
@@ -48,8 +53,10 @@ app = typer.Typer(
 )
 config_app = typer.Typer(help="Configure non-secret Think Tank preferences.")
 config_auth_app = typer.Typer(help="Manage non-secret provider auth metadata.")
+config_model_app = typer.Typer(help="Manage non-secret named model profiles.")
 app.add_typer(config_app, name="config")
 config_app.add_typer(config_auth_app, name="auth")
+config_app.add_typer(config_model_app, name="model")
 console = Console()
 
 
@@ -88,23 +95,43 @@ def new_workspace(
 def ask(
     prompt: Annotated[str, typer.Argument(help="Prompt to send to the selected model.")],
     project: Annotated[Path, typer.Option("--project", help="Think Tank project path.")],
-    model: Annotated[str, typer.Option("--model", help="Explicit provider:model identifier.")],
+    model: Annotated[
+        str | None,
+        typer.Option("--model", help="Explicit provider:model identifier."),
+    ] = None,
+    model_profile: Annotated[
+        str | None,
+        typer.Option("--model-profile", help="Named model profile from Think Tank config."),
+    ] = None,
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", help="Path to read non-secret Think Tank config."),
+    ] = None,
 ) -> None:
     """Run one non-interactive model interaction and record its transcript."""
 
     try:
+        selected_model = _selected_ask_model(
+            model=model,
+            model_profile=model_profile,
+            config_path=config or default_config_path(os.environ),
+        )
         result = ask_project(
             project,
             prompt=prompt,
-            model=model,
+            model=selected_model,
             client=AisuiteModelClient(),
         )
     except (
+        ConfigNotFoundError,
+        ConfigFormatError,
         MissingModelError,
         MissingPromptError,
+        ModelProfileNotFoundError,
         ProjectStateNotFoundError,
         ModelClientConfigurationError,
         ModelClientCallError,
+        ValueError,
     ) as exc:
         raise typer.BadParameter(str(exc)) from exc
 
@@ -211,6 +238,91 @@ def config_validate(
     console.print(result["message"])
     if not result["ok"]:
         raise typer.Exit(1)
+
+
+@config_model_app.command("add")
+def config_model_add(
+    name: Annotated[str, typer.Argument(help="Name for the model profile.")],
+    model: Annotated[
+        str,
+        typer.Option("--model", help="Explicit provider:model identifier to store."),
+    ],
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", help="Path to update non-secret Think Tank config."),
+    ] = None,
+) -> None:
+    """Add or update a named non-secret model profile."""
+
+    config_path = config or default_config_path(os.environ)
+    try:
+        result = add_model_profile(config_path, name=name, model=model)
+    except (ConfigFormatError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    action = "Added" if result["added"] else "Updated"
+    console.print(
+        f"{action} model profile {result['name']} in {result['config_path']}."
+    )
+    console.print(f"Model: {result['model']}")
+    console.print("No provider secrets or default model were stored.")
+
+
+@config_model_app.command("list")
+def config_model_list(
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", help="Path to read non-secret Think Tank config."),
+    ] = None,
+    json_output: Annotated[bool, typer.Option("--json", help="Emit JSON output.")] = False,
+) -> None:
+    """List named model profiles without provider secrets."""
+
+    config_path = config or default_config_path(os.environ)
+    try:
+        result = list_model_profiles(config_path)
+    except (ConfigNotFoundError, ConfigFormatError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    if json_output:
+        typer.echo(json.dumps(result, indent=2, sort_keys=True))
+        return
+
+    console.print(f"Config: {result['config_path']}")
+    if not result["profiles"]:
+        console.print("No model profiles are configured.")
+    for profile in result["profiles"]:
+        console.print(f"{profile['name']}: {profile['model']}")
+    console.print("Model profiles do not create a default model or fallback policy.")
+
+
+@config_model_app.command("remove")
+def config_model_remove(
+    name: Annotated[str, typer.Argument(help="Model profile to remove.")],
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", help="Path to update non-secret Think Tank config."),
+    ] = None,
+) -> None:
+    """Remove a named model profile from Think Tank config."""
+
+    config_path = config or default_config_path(os.environ)
+    try:
+        result = remove_model_profile(config_path, name)
+    except (ConfigNotFoundError, ConfigFormatError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    if result["removed"]:
+        console.print(
+            f"Removed model profile {result['removed_profile']} from "
+            f"{result['config_path']}."
+        )
+    else:
+        console.print(
+            f"No model profile {result['removed_profile']} was present in "
+            f"{result['config_path']}."
+        )
+    console.print("No provider secrets, auth metadata, or project transcripts were modified.")
 
 
 @config_auth_app.command("add")
@@ -366,3 +478,16 @@ def _validation_status_label(status: str) -> str:
         "provider_failure": "provider failure",
     }
     return labels[status]
+
+
+def _selected_ask_model(
+    *,
+    model: str | None,
+    model_profile: str | None,
+    config_path: Path,
+) -> str | None:
+    if model and model.strip() and model_profile and model_profile.strip():
+        raise ValueError("use either --model or --model-profile, not both")
+    if model_profile and model_profile.strip():
+        return resolve_model_profile(config_path, model_profile)["model"]
+    return model

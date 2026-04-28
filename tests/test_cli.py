@@ -97,6 +97,101 @@ def test_cli_ask_records_response(monkeypatch) -> None:
     assert "response from test:model: user" in result.output
 
 
+def test_cli_ask_uses_model_profile(monkeypatch) -> None:
+    monkeypatch.setattr("think_tank.cli.AisuiteModelClient", FakeAisuiteModelClient)
+    with runner.isolated_filesystem():
+        init_workspace(Path("idea"), name="Test Idea")
+        add_result = runner.invoke(
+            app,
+            [
+                "config",
+                "model",
+                "add",
+                "fast",
+                "--model",
+                "groq:llama-3.1-8b",
+                "--config",
+                "config.toml",
+            ],
+        )
+        result = runner.invoke(
+            app,
+            [
+                "ask",
+                "What next?",
+                "--project",
+                "idea",
+                "--model-profile",
+                "fast",
+                "--config",
+                "config.toml",
+            ],
+        )
+
+    assert add_result.exit_code == 0
+    assert result.exit_code == 0
+    assert "response from groq:llama-3.1-8b: user" in result.output
+
+
+def test_cli_ask_rejects_model_and_profile_together(monkeypatch) -> None:
+    monkeypatch.setattr("think_tank.cli.AisuiteModelClient", FakeAisuiteModelClient)
+    with runner.isolated_filesystem():
+        init_workspace(Path("idea"), name="Test Idea")
+        result = runner.invoke(
+            app,
+            [
+                "ask",
+                "What next?",
+                "--project",
+                "idea",
+                "--model",
+                "openai:gpt-4o",
+                "--model-profile",
+                "fast",
+            ],
+        )
+
+    assert result.exit_code != 0
+    assert "use either --model or --model-profile" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_cli_ask_reports_missing_model_profile_without_traceback(monkeypatch) -> None:
+    monkeypatch.setattr("think_tank.cli.AisuiteModelClient", FakeAisuiteModelClient)
+    with runner.isolated_filesystem():
+        init_workspace(Path("idea"), name="Test Idea")
+        runner.invoke(
+            app,
+            [
+                "config",
+                "model",
+                "add",
+                "fast",
+                "--model",
+                "groq:llama-3.1-8b",
+                "--config",
+                "config.toml",
+            ],
+        )
+        result = runner.invoke(
+            app,
+            [
+                "ask",
+                "What next?",
+                "--project",
+                "idea",
+                "--model-profile",
+                "missing",
+                "--config",
+                "config.toml",
+            ],
+        )
+
+    assert result.exit_code != 0
+    assert "model profile not found: missing" in result.output
+    assert "Traceback" not in result.output
+
+
 def test_cli_ask_requires_project() -> None:
     with runner.isolated_filesystem():
         result = runner.invoke(app, ["ask", "What next?", "--model", "test:model"])
@@ -110,7 +205,9 @@ def test_cli_ask_requires_model() -> None:
         result = runner.invoke(app, ["ask", "What next?", "--project", "idea"])
 
     assert result.exit_code != 0
-    assert "Missing option" in result.output
+    assert "--model <provider:model>" in result.output
+    assert "--model-profile" in result.output
+    assert "Traceback" not in result.output
 
 
 def test_cli_ask_requires_prompt() -> None:
@@ -194,6 +291,83 @@ def test_cli_config_init_yes_writes_non_secret_config() -> None:
     assert "openai" in result.output
     assert "sk-secret" not in config_text
     assert "OPENAI_API_KEY" in config_text
+
+
+def test_cli_config_model_add_list_remove() -> None:
+    with runner.isolated_filesystem():
+        add_result = runner.invoke(
+            app,
+            [
+                "config",
+                "model",
+                "add",
+                "fast",
+                "--model",
+                "groq:llama-3.1-8b",
+                "--config",
+                "config.toml",
+            ],
+        )
+        list_result = runner.invoke(
+            app,
+            ["config", "model", "list", "--config", "config.toml", "--json"],
+        )
+        remove_result = runner.invoke(
+            app,
+            ["config", "model", "remove", "fast", "--config", "config.toml"],
+        )
+        final_list_result = runner.invoke(
+            app,
+            ["config", "model", "list", "--config", "config.toml", "--json"],
+        )
+
+    assert add_result.exit_code == 0
+    assert "Added model profile fast" in add_result.output
+    assert "Model: groq:llama-3.1-8b" in add_result.output
+    assert "default model" in add_result.output
+    payload = json.loads(list_result.output)
+    assert payload["profiles"] == [
+        {
+            "name": "fast",
+            "model": "groq:llama-3.1-8b",
+        }
+    ]
+    assert remove_result.exit_code == 0
+    assert "Removed model profile fast" in remove_result.output
+    assert json.loads(final_list_result.output)["profiles"] == []
+
+
+def test_cli_config_model_add_rejects_unknown_provider_without_traceback() -> None:
+    with runner.isolated_filesystem():
+        result = runner.invoke(
+            app,
+            [
+                "config",
+                "model",
+                "add",
+                "future",
+                "--model",
+                "futureai:model",
+                "--config",
+                "config.toml",
+            ],
+        )
+
+    assert result.exit_code != 0
+    assert "unsupported model provider: futureai" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_cli_config_model_list_reports_missing_config() -> None:
+    with runner.isolated_filesystem():
+        result = runner.invoke(
+            app,
+            ["config", "model", "list", "--config", "missing.toml"],
+        )
+
+    assert result.exit_code != 0
+    assert "config not found" in result.output
+    assert "Traceback" not in result.output
 
 
 def test_cli_config_auth_list_reports_metadata_without_secret_values() -> None:
