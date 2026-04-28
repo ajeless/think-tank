@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from think_tank.config import (
+    ConfigFormatError,
     ConfigNotFoundError,
     ModelProfileNotFoundError,
     ProviderAuthMethodSpec,
@@ -58,6 +59,14 @@ def test_detect_provider_statuses_reports_detected_env_var_names_only() -> None:
     assert google["missing_env_vars"] == ["GOOGLE_APPLICATION_CREDENTIALS"]
 
 
+def test_load_config_wraps_invalid_toml(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text("enabled_providers = [", encoding="utf-8")
+
+    with pytest.raises(ConfigFormatError, match="config TOML is invalid"):
+        load_config(config_path)
+
+
 def test_ollama_is_ready_without_secret() -> None:
     statuses = detect_provider_statuses({})
 
@@ -71,7 +80,7 @@ def test_provider_auth_method_options_report_ready_methods_without_secrets(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
-        "think_tank.config.PROVIDER_SPECS",
+        "think_tank.provider_registry.PROVIDER_SPECS",
         (
             ProviderSpec(
                 name="testai",
@@ -252,7 +261,7 @@ def test_add_config_auth_can_select_supported_auth_kind(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
-        "think_tank.config.PROVIDER_SPECS",
+        "think_tank.provider_registry.PROVIDER_SPECS",
         (
             ProviderSpec(
                 name="testai",
@@ -298,7 +307,7 @@ def test_add_config_auth_without_selection_uses_primary_method(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
-        "think_tank.config.PROVIDER_SPECS",
+        "think_tank.provider_registry.PROVIDER_SPECS",
         (
             ProviderSpec(
                 name="testai",
@@ -495,6 +504,17 @@ def test_add_model_profile_creates_config_without_default_model(tmp_path: Path) 
     assert "default_model" not in raw_config
     parsed = load_config(config_path)
     assert parsed["models"]["fast"]["model"] == "groq:llama-3.1-8b"
+
+
+def test_add_model_profile_escapes_control_characters(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+
+    add_model_profile(config_path, name="line\nname", model="openai:gpt\t4o")
+
+    config_text = config_path.read_text(encoding="utf-8")
+    assert '"line\\nname"' in config_text
+    assert '"openai:gpt\\t4o"' in config_text
+    assert load_config(config_path)["models"]["line\nname"]["model"] == "openai:gpt\t4o"
 
 
 def test_model_profile_crud_preserves_auth_metadata(tmp_path: Path) -> None:

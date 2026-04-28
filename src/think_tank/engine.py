@@ -10,7 +10,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal, Mapping, TypedDict
 
-from .config import PROVIDER_SPECS, detect_provider_statuses
 from .model_client import (
     ModelClient,
     ModelClientAuthenticationError,
@@ -21,6 +20,7 @@ from .model_client import (
     OllamaModelRegistry,
     OllamaRegistryError,
 )
+from .provider_registry import PROVIDER_SPECS, detect_provider_statuses
 
 
 VALIDATION_PROMPT = "Reply with OK."
