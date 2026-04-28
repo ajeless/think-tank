@@ -4,7 +4,12 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from think_tank.cli import app
-from think_tank.model_client import ModelClientCallError, ModelMessage, ModelResponse
+from think_tank.model_client import (
+    ModelClientAuthenticationError,
+    ModelClientCallError,
+    ModelMessage,
+    ModelResponse,
+)
 from think_tank.workspace import init_workspace
 
 
@@ -19,6 +24,23 @@ class FakeAisuiteModelClient:
 class FailingAisuiteModelClient:
     def complete(self, *, model: str, messages: list[ModelMessage]) -> ModelResponse:
         raise ModelClientCallError("openai", "provider quota failed")
+
+
+class AuthFailingAisuiteModelClient:
+    def complete(self, *, model: str, messages: list[ModelMessage]) -> ModelResponse:
+        raise ModelClientAuthenticationError("openai", "invalid API key")
+
+
+class FakeOllamaHttpModelRegistry:
+    def __init__(self, models: list[str]) -> None:
+        self.models = models
+
+    @classmethod
+    def from_env(cls, env):
+        return cls(models=["llama3.1:8b"])
+
+    def list_models(self) -> list[str]:
+        return self.models
 
 
 def test_cli_help_exits_successfully() -> None:
@@ -172,3 +194,94 @@ def test_cli_config_init_yes_writes_non_secret_config() -> None:
     assert "openai" in result.output
     assert "sk-secret" not in config_text
     assert "OPENAI_API_KEY" in config_text
+
+
+def test_cli_config_validate_reports_success_without_secret_values(monkeypatch) -> None:
+    monkeypatch.setattr("think_tank.cli.AisuiteModelClient", FakeAisuiteModelClient)
+
+    result = runner.invoke(
+        app,
+        [
+            "config",
+            "validate",
+            "--provider",
+            "openai",
+            "--model",
+            "openai:gpt-4o",
+        ],
+        env={"OPENAI_API_KEY": "sk-secret"},
+    )
+
+    assert result.exit_code == 0
+    assert "Provider: openai" in result.output
+    assert "Model: openai:gpt-4o" in result.output
+    assert "Status: success" in result.output
+    assert "sk-secret" not in result.output
+
+
+def test_cli_config_validate_reports_missing_credentials_without_traceback() -> None:
+    result = runner.invoke(
+        app,
+        [
+            "config",
+            "validate",
+            "--provider",
+            "openai",
+            "--model",
+            "openai:gpt-4o",
+        ],
+        env={"OPENAI_API_KEY": ""},
+    )
+
+    assert result.exit_code == 1
+    assert "Status: missing credentials" in result.output
+    assert "OPENAI_API_KEY" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_cli_config_validate_reports_auth_failure(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "think_tank.cli.AisuiteModelClient",
+        AuthFailingAisuiteModelClient,
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "config",
+            "validate",
+            "--provider",
+            "openai",
+            "--model",
+            "openai:gpt-4o",
+        ],
+        env={"OPENAI_API_KEY": "sk-secret"},
+    )
+
+    assert result.exit_code == 1
+    assert "Status: auth failure" in result.output
+    assert "invalid API key" in result.output
+    assert "sk-secret" not in result.output
+
+
+def test_cli_config_validate_checks_ollama_model_with_fake_registry(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "think_tank.cli.OllamaHttpModelRegistry",
+        FakeOllamaHttpModelRegistry,
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "config",
+            "validate",
+            "--provider",
+            "ollama",
+            "--model",
+            "ollama:llama3.1:8b",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Provider: ollama" in result.output
+    assert "Status: success" in result.output

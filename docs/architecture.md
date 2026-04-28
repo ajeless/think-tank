@@ -47,6 +47,18 @@ Subscription account sign-in is provider-specific and only acceptable through an
 
 Provider failures are product errors, not Python tracebacks. The CLI should surface concise messages for missing credentials, quota failures, authentication failures, and provider SDK issues without leaking secret values.
 
+`think config validate` is the explicit real-provider diagnostic boundary. It belongs in setup/config space, not work-command behavior. Validation may spend provider quota or hit external rate limits, so it is opt-in and never runs as part of `doctor`, `init`, or `ask` by default. The engine owns the validation behavior and returns structured status data; the CLI only formats that status and chooses the process exit code.
+
+Validation must use the same no-middleman rules as model calls:
+
+- Require an explicit provider and `provider:model` value.
+- Do not choose fallback models or fallback auth methods.
+- Do not store credentials or write provider secrets to config.
+- Do not write transcripts or mutate project state.
+- Use fake clients in tests so test runs never depend on provider APIs or network access.
+
+Ollama is local-provider validation rather than credential validation. The validator checks local server availability using `OLLAMA_API_URL` or the default `http://localhost:11434`, then verifies that the requested model appears in the local model registry.
+
 ## Local-First Project State
 
 A Think Tank project is a local directory containing durable state and artifacts. Today that state begins as JSON plus directories for transcripts, notes, and artifacts. Git remains the versioning layer.

@@ -42,6 +42,12 @@ Write non-secret provider configuration from detected credentials:
 think config init
 ```
 
+Explicitly validate real provider credentials and one selected model:
+
+```bash
+think config validate --provider openai --model openai:gpt-4o
+```
+
 The command creates:
 
 ```text
@@ -61,6 +67,8 @@ my-idea/
 `state.json` starts with `schema_version: 1`, user-supplied project metadata, and intentionally empty top-level collections for the project state.
 
 `think ask` loads the project `state.json` as read-only context, calls the requested `provider:model`, prints the model response, and appends the raw interaction to `transcripts/ask.jsonl`. It does not synthesize, mutate project state, choose default models, run multiple agents, or commit to git.
+
+`think config validate` is an explicit opt-in diagnostic for real provider access. It may call provider APIs with a tiny validation prompt, so it is never run by `doctor`, `init`, or work commands by default. It reports success, missing credentials, authentication failures, quota or rate limits, provider SDK/configuration issues, and generic provider failures without printing secret values. For Ollama, it checks the local server and verifies that the requested model is installed. It does not write transcripts, mutate project state, choose fallback models, or store secrets.
 
 Packaged model-provider support currently includes:
 
