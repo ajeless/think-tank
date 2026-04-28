@@ -6,6 +6,7 @@ from think_tank.cli import app
 from cli_helpers import (
     AuthFailingAisuiteModelClient,
     FakeAisuiteModelClient,
+    FakeGeminiModelRegistry,
     FakeOllamaHttpModelRegistry,
     runner,
 )
@@ -192,3 +193,73 @@ def test_cli_config_validate_checks_ollama_model_with_fake_registry(monkeypatch)
     assert result.exit_code == 0
     assert "Provider: ollama" in result.output
     assert "Status: success" in result.output
+
+
+def test_cli_config_models_list_reports_gemini_ids_without_secret_values(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "think_tank.cli_config_available_models.GeminiModelRegistry",
+        FakeGeminiModelRegistry,
+    )
+
+    result = runner.invoke(
+        app,
+        ["config", "models", "list", "--provider", "gemini"],
+        env={"GEMINI_API_KEY": "gemini-secret"},
+    )
+
+    assert result.exit_code == 0
+    assert "Provider: gemini" in result.output
+    assert "Status: success" in result.output
+    assert "gemini:gemini-3-flash-preview" in result.output
+    assert "Gemini 3 Flash Preview" in result.output
+    assert "generateContent" in result.output
+    assert "gemini-secret" not in result.output
+
+
+def test_cli_config_models_list_json_reports_gemini_ids(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "think_tank.cli_config_available_models.GeminiModelRegistry",
+        FakeGeminiModelRegistry,
+    )
+
+    result = runner.invoke(
+        app,
+        ["config", "models", "list", "--provider", "gemini", "--json"],
+        env={"GOOGLE_API_KEY": "google-secret"},
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["models"][0]["model"] == "gemini:gemini-3-flash-preview"
+    assert payload["models"][0]["supported_actions"] == [
+        "generateContent",
+        "countTokens",
+    ]
+    assert "google-secret" not in result.output
+
+
+def test_cli_config_models_list_reports_missing_credentials_without_traceback() -> None:
+    result = runner.invoke(
+        app,
+        ["config", "models", "list", "--provider", "gemini"],
+        env={"GEMINI_API_KEY": "", "GOOGLE_API_KEY": ""},
+    )
+
+    assert result.exit_code == 1
+    assert "Status: missing credentials" in result.output
+    assert "GEMINI_API_KEY" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_cli_config_models_list_reports_unsupported_provider_without_traceback() -> None:
+    result = runner.invoke(
+        app,
+        ["config", "models", "list", "--provider", "openai"],
+        env={"OPENAI_API_KEY": "sk-secret"},
+    )
+
+    assert result.exit_code == 1
+    assert "Status: not supported" in result.output
+    assert "openai" in result.output
+    assert "sk-secret" not in result.output
+    assert "Traceback" not in result.output

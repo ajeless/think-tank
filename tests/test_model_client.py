@@ -5,6 +5,7 @@ import pytest
 from think_tank.model_client import (
     AisuiteModelClient,
     DEFAULT_OLLAMA_API_URL,
+    GeminiModelRegistry,
     GROQ_BASE_URL,
     ModelClientCallError,
     ModelClientAuthenticationError,
@@ -46,6 +47,20 @@ class FakeGeminiModels:
     def generate_content(self, *, model, contents, config=None):
         self.calls.append({"model": model, "contents": contents, "config": config})
         return SimpleNamespace(text="gemini ok")
+
+    def list(self):
+        return [
+            SimpleNamespace(
+                name="models/gemini-3-flash-preview",
+                display_name="Gemini 3 Flash Preview",
+                supported_actions=["generateContent", "countTokens"],
+            ),
+            SimpleNamespace(
+                name="models/gemini-embedding-001",
+                display_name="Gemini Embedding",
+                supported_actions=["embedContent"],
+            ),
+        ]
 
 
 class FakeGeminiClient:
@@ -195,6 +210,23 @@ def test_gemini_client_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None
             model="gemini:gemini-3.1-pro-preview",
             messages=[{"role": "user", "content": "Hello"}],
         )
+
+
+def test_gemini_model_registry_lists_provider_model_metadata() -> None:
+    registry = GeminiModelRegistry(client=FakeGeminiClient())
+
+    assert registry.list_models() == [
+        {
+            "provider_model": "gemini-3-flash-preview",
+            "display_name": "Gemini 3 Flash Preview",
+            "supported_actions": ["generateContent", "countTokens"],
+        },
+        {
+            "provider_model": "gemini-embedding-001",
+            "display_name": "Gemini Embedding",
+            "supported_actions": ["embedContent"],
+        },
+    ]
 
 
 def test_openrouter_client_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:

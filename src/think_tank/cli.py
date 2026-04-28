@@ -12,6 +12,7 @@ from rich.console import Console
 
 from .cli_config import config_app
 from .cli_config_auth import config_auth_app
+from .cli_config_available_models import config_available_models_app
 from .cli_config_defaults import config_defaults_app
 from .cli_config_models import config_model_app
 from .config import (
@@ -48,6 +49,7 @@ app = typer.Typer(
 )
 config_app.add_typer(config_auth_app, name="auth")
 config_app.add_typer(config_model_app, name="model")
+config_app.add_typer(config_available_models_app, name="models")
 config_app.add_typer(config_defaults_app, name="defaults")
 app.add_typer(config_app, name="config")
 console = Console()

@@ -2,7 +2,7 @@
 
 Think Tank is a local-first idea workspace where a human and multiple AI agents develop ideas into durable, searchable, versioned artifacts.
 
-This repository is being bootstrapped incrementally. The current implementation provides the Python package, CLI entrypoint, test harness, local workspace creation, guided setup, provider credential diagnostics, explicit provider validation, named model profiles, and a minimal one-model `ask` path that records transcripts.
+This repository is being bootstrapped incrementally. The current implementation provides the Python package, CLI entrypoint, test harness, local workspace creation, guided setup, provider credential diagnostics, provider model discovery, explicit provider validation, named model profiles, and a minimal one-model `ask` path that records transcripts.
 
 ## Design Notes
 
@@ -87,6 +87,12 @@ Explicitly validate real provider credentials and one selected model:
 think config validate --provider openai --model openai:gpt-4o
 ```
 
+List model IDs visible to the current Gemini API key:
+
+```bash
+think config models list --provider gemini
+```
+
 The command creates:
 
 ```text
@@ -114,6 +120,8 @@ my-idea/
 `think config defaults set --model-profile <name>` records an explicit user-authored default model profile in non-secret config. Work commands do not use recorded defaults automatically yet; `think ask` still requires `--model` or `--model-profile`.
 
 `think config validate` is an explicit opt-in diagnostic for real provider access. It may call provider APIs with a tiny validation prompt, so it is never run by `doctor`, `init`, or work commands by default. It reports success, missing credentials, authentication failures, quota or rate limits, provider SDK/configuration issues, and generic provider failures without printing secret values. For Ollama, it checks the local server and verifies that the requested model is installed. It does not write transcripts, mutate project state, choose fallback models, or store secrets.
+
+`think config models list --provider <name>` is an explicit opt-in discovery diagnostic for provider-visible model IDs. The first implementation supports Gemini through the Gemini Developer API and prints `gemini:<model>` strings, display names, and supported provider actions without printing secret values. It does not validate a model with a generation call, store model profiles, choose defaults, mutate project state, or run as part of `doctor`, `init`, or work commands.
 
 Packaged model-provider support currently includes:
 

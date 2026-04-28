@@ -25,6 +25,7 @@ These command shapes are either implemented or reserved as current direction, no
 | `think config doctor` | Detect provider credentials from the environment without printing secret values. Implemented. |
 | `think config init` | Write non-secret provider configuration from detected credentials. Implemented. |
 | `think config validate --provider <name> --model <provider:model>` | Explicitly validate real provider access for one selected model. Implemented. |
+| `think config models list --provider <name>` | List provider-visible model IDs for configured credentials. Implemented for Gemini. |
 | `think config auth doctor` | Inspect configured/detected auth paths without printing secret values. Implemented. |
 | `think config auth methods` | List known provider auth method capabilities without printing secret values. Implemented. |
 | `think config auth add <provider>` | Add or enable a provider auth path through setup-only guidance. Implemented. |
@@ -259,6 +260,30 @@ Current behavior:
 - Reports success, missing credentials, auth failure, quota/rate limit, provider SDK/config issues, and generic provider failure.
 - Checks Ollama server availability through `OLLAMA_API_URL` or `http://localhost:11434` and verifies the requested model is installed.
 - Does not write transcripts, mutate project state, choose fallback models, store secrets, or run as part of `doctor` or `init`.
+
+### `think config models list --provider <name>`
+
+Intent: show model IDs visible to the current provider credentials without asking the user to guess provider-native names from product labels.
+
+Why it exists: provider catalogs are account-specific and change over time. Product labels such as "Gemini Flash" or "paid tier" do not always map cleanly to a usable API model string. A discovery command lets the user inspect the actual model IDs their current credentials can see before creating model profiles or running validation.
+
+Current status: implemented for Gemini.
+
+Current behavior:
+
+- Requires `--provider <name>`.
+- For `gemini`, uses the Gemini Developer API key path with `GEMINI_API_KEY` or `GOOGLE_API_KEY`.
+- Prints `provider:model` strings, provider display names when available, and supported provider actions.
+- Supports `--json` for machine-readable output.
+- Reports missing credentials and unsupported providers without printing secret values.
+- Does not send a generation prompt, validate model availability with `generateContent`, write config, create model profiles, choose defaults, mutate project state, or run as part of `doctor`, `init`, `validate`, or work commands.
+
+Current non-goals:
+
+- No model catalog caching.
+- No automatic filtering to "recommended" models.
+- No automatic model profile creation.
+- No provider fallback when one provider does not support discovery.
 
 ### `think ask "<prompt>" --project <path> --model <provider:model>`
 

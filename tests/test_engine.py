@@ -8,10 +8,12 @@ from think_tank.engine import (
     MissingModelError,
     MissingPromptError,
     ProjectStateNotFoundError,
+    ProviderModelListingInputError,
     ProviderValidationInputError,
     VALIDATION_PROMPT,
     ask_project,
     get_engine_status,
+    list_provider_models,
     validate_provider,
 )
 from think_tank.model_client import (
@@ -22,6 +24,8 @@ from think_tank.model_client import (
     ModelMessage,
     ModelResponse,
     OllamaRegistryError,
+    ProviderModelInfo,
+    ProviderModelRegistryError,
 )
 from think_tank.workspace import init_workspace
 
@@ -57,6 +61,23 @@ class FakeOllamaRegistry:
         self.calls = 0
 
     def list_models(self) -> list[str]:
+        self.calls += 1
+        if self.exc is not None:
+            raise self.exc
+        return self.models
+
+
+class FakeProviderModelRegistry:
+    def __init__(
+        self,
+        models: list[ProviderModelInfo] | None = None,
+        exc: ProviderModelRegistryError | None = None,
+    ) -> None:
+        self.models = models or []
+        self.exc = exc
+        self.calls = 0
+
+    def list_models(self) -> list[ProviderModelInfo]:
         self.calls += 1
         if self.exc is not None:
             raise self.exc
@@ -167,6 +188,93 @@ def test_validate_provider_sends_tiny_prompt_and_returns_success() -> None:
             "messages": [{"role": "user", "content": VALIDATION_PROMPT}],
         }
     ]
+
+
+def test_list_provider_models_returns_gemini_model_ids_without_secrets() -> None:
+    registry = FakeProviderModelRegistry(
+        models=[
+            {
+                "provider_model": "gemini-3-flash-preview",
+                "display_name": "Gemini 3 Flash Preview",
+                "supported_actions": ["generateContent", "countTokens"],
+            }
+        ]
+    )
+
+    result = list_provider_models(
+        provider="gemini",
+        env={"GEMINI_API_KEY": "gemini-secret"},
+        gemini_registry=registry,
+    )
+
+    assert result == {
+        "provider": "gemini",
+        "ok": True,
+        "status": "success",
+        "message": "Discovered 1 model(s).",
+        "models": [
+            {
+                "provider": "gemini",
+                "provider_model": "gemini-3-flash-preview",
+                "model": "gemini:gemini-3-flash-preview",
+                "display_name": "Gemini 3 Flash Preview",
+                "supported_actions": ["generateContent", "countTokens"],
+            }
+        ],
+    }
+    assert registry.calls == 1
+    assert "gemini-secret" not in str(result)
+
+
+def test_list_provider_models_reports_missing_credentials_without_querying_registry() -> None:
+    registry = FakeProviderModelRegistry()
+
+    result = list_provider_models(
+        provider="gemini",
+        env={"GEMINI_API_KEY": ""},
+        gemini_registry=registry,
+    )
+
+    assert result["ok"] is False
+    assert result["status"] == "missing_credentials"
+    assert "GEMINI_API_KEY" in result["message"]
+    assert registry.calls == 0
+
+
+def test_list_provider_models_reports_unsupported_provider() -> None:
+    result = list_provider_models(
+        provider="openai",
+        env={"OPENAI_API_KEY": "sk-secret"},
+    )
+
+    assert result["ok"] is False
+    assert result["status"] == "not_supported"
+    assert "openai" in result["message"]
+    assert "sk-secret" not in str(result)
+
+
+def test_list_provider_models_requires_gemini_registry() -> None:
+    with pytest.raises(ProviderModelListingInputError, match="registry"):
+        list_provider_models(
+            provider="gemini",
+            env={"GEMINI_API_KEY": "gemini-secret"},
+        )
+
+
+def test_list_provider_models_reports_registry_error_without_secret_values() -> None:
+    registry = FakeProviderModelRegistry(
+        exc=ProviderModelRegistryError("failure with gemini-secret")
+    )
+
+    result = list_provider_models(
+        provider="gemini",
+        env={"GEMINI_API_KEY": "gemini-secret"},
+        gemini_registry=registry,
+    )
+
+    assert result["ok"] is False
+    assert result["status"] == "provider_failure"
+    assert "gemini-secret" not in result["message"]
 
 
 def test_validate_provider_reports_missing_credentials_without_calling_client() -> None:
