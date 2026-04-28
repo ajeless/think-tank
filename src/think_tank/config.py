@@ -47,6 +47,26 @@ class AuthRemoveResult(TypedDict):
     enabled_providers: list[str]
 
 
+class AuthDoctorProvider(TypedDict):
+    provider: str
+    display_name: str
+    configured: bool
+    detected: bool
+    ready: bool
+    configured_auth_kind: str
+    detected_auth_kind: str
+    configured_env_vars: list[str]
+    detected_env_vars: list[str]
+    missing_env_vars: list[str]
+    notes: list[str]
+
+
+class AuthDoctorResult(TypedDict):
+    config_path: str
+    config_found: bool
+    providers: list[AuthDoctorProvider]
+
+
 class ConfigNotFoundError(FileNotFoundError):
     """Raised when a requested Think Tank config file does not exist."""
 
@@ -220,6 +240,42 @@ def remove_config_auth(config_path: Path, provider: str) -> AuthRemoveResult:
     }
 
 
+def doctor_config_auth(config_path: Path, *, env: Mapping[str, str]) -> AuthDoctorResult:
+    resolved_path = config_path.expanduser()
+    config_found = resolved_path.exists()
+    if config_found:
+        config = load_config(resolved_path)
+        enabled_providers = set(_enabled_providers(config))
+        provider_tables = _provider_tables(config)
+    else:
+        enabled_providers = set()
+        provider_tables = {}
+
+    configured_provider_names = set(provider_tables)
+    detected_statuses = detect_provider_statuses(env)
+    provider_names = _doctor_provider_names(
+        detected_statuses,
+        configured_provider_names | enabled_providers,
+    )
+    status_by_provider = {
+        status["provider"]: status for status in detected_statuses
+    }
+
+    return {
+        "config_path": str(resolved_path),
+        "config_found": config_found,
+        "providers": [
+            _doctor_provider(
+                provider,
+                status_by_provider=status_by_provider,
+                enabled_providers=enabled_providers,
+                provider_tables=provider_tables,
+            )
+            for provider in provider_names
+        ],
+    }
+
+
 def _provider_status(spec: ProviderSpec, env: Mapping[str, str]) -> ProviderStatus:
     detected = [name for name in spec.env_vars if env.get(name)]
     missing = [name for name in spec.required_env_vars if not env.get(name)]
@@ -369,3 +425,56 @@ def _secrets(config: Mapping[str, object]) -> str:
 
 def _toml_string(value: str) -> str:
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _doctor_provider_names(
+    statuses: list[ProviderStatus],
+    configured_providers: set[str],
+) -> list[str]:
+    names = [status["provider"] for status in statuses]
+    for provider in sorted(configured_providers):
+        if provider not in names:
+            names.append(provider)
+    return names
+
+
+def _doctor_provider(
+    provider: str,
+    *,
+    status_by_provider: Mapping[str, ProviderStatus],
+    enabled_providers: set[str],
+    provider_tables: Mapping[str, Mapping[str, object]],
+) -> AuthDoctorProvider:
+    status = status_by_provider.get(provider)
+    configured = provider in enabled_providers or provider in provider_tables
+    configured_env_vars = _env_vars(provider, provider_tables)
+    configured_auth_kind = _auth_kind(provider, provider_tables)
+
+    if status is None:
+        return {
+            "provider": provider,
+            "display_name": provider,
+            "configured": configured,
+            "detected": False,
+            "ready": False,
+            "configured_auth_kind": configured_auth_kind,
+            "detected_auth_kind": "",
+            "configured_env_vars": configured_env_vars,
+            "detected_env_vars": [],
+            "missing_env_vars": [],
+            "notes": ["Provider is configured but is not in the packaged provider set."],
+        }
+
+    return {
+        "provider": provider,
+        "display_name": status["display_name"],
+        "configured": configured,
+        "detected": bool(status["detected_env_vars"]) or status["auth_kind"] == "local_server",
+        "ready": status["ready"],
+        "configured_auth_kind": configured_auth_kind,
+        "detected_auth_kind": status["auth_kind"],
+        "configured_env_vars": configured_env_vars,
+        "detected_env_vars": status["detected_env_vars"],
+        "missing_env_vars": status["missing_env_vars"],
+        "notes": status["notes"],
+    }

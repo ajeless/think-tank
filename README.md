@@ -42,9 +42,10 @@ Write non-secret provider configuration from detected credentials:
 think config init
 ```
 
-List or remove non-secret provider auth metadata:
+Inspect, list, or remove non-secret provider auth metadata:
 
 ```bash
+think config auth doctor
 think config auth list
 think config auth remove groq
 ```
