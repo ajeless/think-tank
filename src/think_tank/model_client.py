@@ -25,6 +25,12 @@ class ModelResponse:
     content: str
 
 
+class ProviderModelInfo(TypedDict):
+    provider_model: str
+    display_name: str
+    supported_actions: list[str]
+
+
 class ModelClient(Protocol):
     """Minimal model-call interface the engine can fake in tests."""
 
@@ -61,6 +67,51 @@ class OllamaModelRegistry(Protocol):
 
 class OllamaRegistryError(RuntimeError):
     """Raised when the local Ollama registry cannot be queried."""
+
+
+class ProviderModelRegistry(Protocol):
+    """Minimal provider model-listing interface the engine can fake in tests."""
+
+    def list_models(self) -> list[ProviderModelInfo]:
+        """Return provider-visible model metadata."""
+
+
+class ProviderModelRegistryError(RuntimeError):
+    """Raised when a provider model registry cannot be queried."""
+
+
+class GeminiModelRegistry:
+    """Google GenAI-backed Gemini model registry probe."""
+
+    def __init__(self, client: Any | None = None) -> None:
+        self._client = client
+
+    @classmethod
+    def from_env(cls, env: Mapping[str, str] | None = None) -> "GeminiModelRegistry":
+        return cls(client=_new_gemini_client(env))
+
+    def list_models(self) -> list[ProviderModelInfo]:
+        client = self._client or _new_gemini_client()
+        try:
+            models = client.models.list()
+        except Exception as exc:
+            raise ProviderModelRegistryError(str(exc)) from exc
+
+        discovered: list[ProviderModelInfo] = []
+        for model in models:
+            provider_model = _gemini_provider_model_name(getattr(model, "name", ""))
+            if not provider_model:
+                continue
+            discovered.append(
+                {
+                    "provider_model": provider_model,
+                    "display_name": _model_display_name(model),
+                    "supported_actions": _string_list(
+                        getattr(model, "supported_actions", None)
+                    ),
+                }
+            )
+        return discovered
 
 
 class OllamaHttpModelRegistry:
@@ -184,8 +235,9 @@ def _new_groq_client() -> Any:
     )
 
 
-def _new_gemini_client() -> Any:
-    api_key = _gemini_api_key(os.environ)
+def _new_gemini_client(env: Mapping[str, str] | None = None) -> Any:
+    env = os.environ if env is None else env
+    api_key = _gemini_api_key(env)
     if not api_key:
         raise ModelClientConfigurationError(
             "Gemini requires GOOGLE_API_KEY or GEMINI_API_KEY in the environment."
@@ -197,6 +249,23 @@ def _new_gemini_client() -> Any:
             "Gemini requires the google-genai package."
         ) from exc
     return genai.Client(api_key=api_key)
+
+
+def _gemini_provider_model_name(name: str) -> str:
+    if not isinstance(name, str):
+        return ""
+    return name.removeprefix("models/").strip()
+
+
+def _model_display_name(model: Any) -> str:
+    display_name = getattr(model, "display_name", None)
+    return display_name if isinstance(display_name, str) else ""
+
+
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
 
 
 def _complete_gemini(

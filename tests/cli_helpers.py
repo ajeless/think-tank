@@ -5,6 +5,7 @@ from think_tank.model_client import (
     ModelClientCallError,
     ModelMessage,
     ModelResponse,
+    ProviderModelInfo,
 )
 
 
@@ -36,6 +37,22 @@ class FakeOllamaHttpModelRegistry:
 
     def list_models(self) -> list[str]:
         return self.models
+
+
+class FakeGeminiModelRegistry:
+    def list_models(self) -> list[ProviderModelInfo]:
+        return [
+            {
+                "provider_model": "gemini-3-flash-preview",
+                "display_name": "Gemini 3 Flash Preview",
+                "supported_actions": ["generateContent", "countTokens"],
+            },
+            {
+                "provider_model": "gemini-embedding-001",
+                "display_name": "Gemini Embedding",
+                "supported_actions": ["embedContent"],
+            },
+        ]
 
 
 class FakeQuestionaryResponse:

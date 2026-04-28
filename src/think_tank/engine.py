@@ -17,6 +17,8 @@ from .model_client import (
     ModelClientConfigurationError,
     ModelClientQuotaOrRateLimitError,
     ModelMessage,
+    ProviderModelRegistry,
+    ProviderModelRegistryError,
     OllamaModelRegistry,
     OllamaRegistryError,
 )
@@ -33,6 +35,13 @@ ValidationStatus = Literal[
     "missing_credentials",
     "auth_failure",
     "quota_or_rate_limit",
+    "provider_config_error",
+    "provider_failure",
+]
+ModelListingStatus = Literal[
+    "success",
+    "missing_credentials",
+    "not_supported",
     "provider_config_error",
     "provider_failure",
 ]
@@ -61,6 +70,22 @@ class ProviderValidationResult(TypedDict):
     message: str
 
 
+class ProviderModel(TypedDict):
+    provider: str
+    provider_model: str
+    model: str
+    display_name: str
+    supported_actions: list[str]
+
+
+class ProviderModelListResult(TypedDict):
+    provider: str
+    ok: bool
+    status: ModelListingStatus
+    message: str
+    models: list[ProviderModel]
+
+
 class MissingModelError(ValueError):
     """Raised when a work command reaches the engine without a model."""
 
@@ -77,6 +102,10 @@ class ProviderValidationInputError(ValueError):
     """Raised when provider validation is called with invalid explicit input."""
 
 
+class ProviderModelListingInputError(ValueError):
+    """Raised when provider model listing is called with invalid input."""
+
+
 def get_engine_status() -> EngineStatus:
     """Return a minimal structured status for the bootstrap skeleton."""
 
@@ -84,6 +113,79 @@ def get_engine_status() -> EngineStatus:
         "product": "Think Tank",
         "ready": True,
     }
+
+
+def list_provider_models(
+    *,
+    provider: str,
+    env: Mapping[str, str],
+    gemini_registry: ProviderModelRegistry | None = None,
+) -> ProviderModelListResult:
+    """List provider-visible model IDs without storing config or secrets."""
+
+    provider = provider.strip().lower()
+    if not provider:
+        raise ProviderModelListingInputError(
+            "config models list requires --provider <name>"
+        )
+    if provider not in {spec.name for spec in PROVIDER_SPECS}:
+        raise ProviderModelListingInputError(f"unsupported provider: {provider}")
+
+    provider_status = _provider_status(provider, env)
+    if provider_status["missing_env_vars"]:
+        missing = ", ".join(provider_status["missing_env_vars"])
+        return _model_list_result(
+            provider=provider,
+            status="missing_credentials",
+            message=f"Missing required environment variable(s): {missing}.",
+            models=[],
+        )
+
+    if provider != "gemini":
+        return _model_list_result(
+            provider=provider,
+            status="not_supported",
+            message=f"Model discovery is not implemented for provider: {provider}.",
+            models=[],
+        )
+    if gemini_registry is None:
+        raise ProviderModelListingInputError(
+            "gemini model discovery requires a registry"
+        )
+
+    try:
+        provider_models = gemini_registry.list_models()
+    except ModelClientConfigurationError as exc:
+        return _model_list_result(
+            provider=provider,
+            status="provider_config_error",
+            message=_safe_exception_message(exc, env),
+            models=[],
+        )
+    except ProviderModelRegistryError as exc:
+        return _model_list_result(
+            provider=provider,
+            status="provider_failure",
+            message=_safe_exception_message(exc, env),
+            models=[],
+        )
+
+    models = [
+        {
+            "provider": provider,
+            "provider_model": model["provider_model"],
+            "model": f"{provider}:{model['provider_model']}",
+            "display_name": model["display_name"],
+            "supported_actions": model["supported_actions"],
+        }
+        for model in provider_models
+    ]
+    return _model_list_result(
+        provider=provider,
+        status="success",
+        message=f"Discovered {len(models)} model(s).",
+        models=models,
+    )
 
 
 def validate_provider(
@@ -323,6 +425,22 @@ def _validation_result(
         "ok": status == "success",
         "status": status,
         "message": message,
+    }
+
+
+def _model_list_result(
+    *,
+    provider: str,
+    status: ModelListingStatus,
+    message: str,
+    models: list[ProviderModel],
+) -> ProviderModelListResult:
+    return {
+        "provider": provider,
+        "ok": status == "success",
+        "status": status,
+        "message": message,
+        "models": models,
     }
 
 
