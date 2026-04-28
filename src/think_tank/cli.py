@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 from typing import Annotated
 
+import questionary
 import typer
 from rich.console import Console
 
@@ -17,7 +18,10 @@ from .config import (
     ConfigFormatError,
     ConfigNotFoundError,
     ModelProfileNotFoundError,
+    ProviderAuthNotReadyError,
     default_config_path,
+    detect_provider_statuses,
+    provider_auth_method_options,
     resolve_model_profile,
 )
 from .engine import (
@@ -32,6 +36,7 @@ from .model_client import (
     ModelClientCallError,
     ModelClientConfigurationError,
 )
+from .setup import SetupAuthSelection, initialize_setup
 from .workspace import WorkspaceAlreadyExistsError, init_workspace
 
 
@@ -76,6 +81,56 @@ def new_workspace(
 
     console.print(f"Created Think Tank workspace: {result['root']}")
     console.print(f"Initialized state: {result['state_path']}")
+
+
+@app.command("init")
+def init_setup(
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", help="Path to write non-secret Think Tank config."),
+    ] = None,
+) -> None:
+    """Run guided setup for auth metadata, model profiles, and explicit defaults."""
+
+    config_path = config or default_config_path(os.environ)
+    auth_selections = _selected_init_auth_paths(config_path=config_path)
+    model_profile_name, model, set_default = _selected_init_model_profile()
+
+    try:
+        result = initialize_setup(
+            config_path,
+            env=os.environ,
+            auth_selections=auth_selections,
+            model_profile_name=model_profile_name,
+            model=model,
+            set_default_model_profile=set_default,
+        )
+    except (
+        ConfigFormatError,
+        ModelProfileNotFoundError,
+        ProviderAuthNotReadyError,
+        ValueError,
+    ) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    console.print(f"Wrote config: {result['config_path']}")
+    if result["auth_paths"]:
+        console.print(
+            "Enabled auth paths: "
+            + ", ".join(
+                f"{path['provider']}:{path['auth_kind']}"
+                for path in result["auth_paths"]
+            )
+        )
+    else:
+        console.print("No provider auth paths enabled.")
+    if result["model_profile"]:
+        profile = result["model_profile"]
+        console.print(f"Model profile: {profile['name']} = {profile['model']}")
+    if result["default_model_profile"]:
+        console.print(f"Explicit default model profile: {result['default_model_profile']}")
+    console.print("Secret values were not stored.")
+    console.print("Work commands do not use defaults automatically yet.")
 
 
 @app.command("ask")
@@ -136,3 +191,67 @@ def _selected_ask_model(
     if model_profile and model_profile.strip():
         return resolve_model_profile(config_path, model_profile)["model"]
     return model
+
+
+def _selected_init_auth_paths(*, config_path: Path) -> list[SetupAuthSelection]:
+    choices = _init_auth_path_choices()
+    selected = questionary.checkbox(
+        f"Enable ready auth paths in {config_path}?",
+        choices=choices,
+    ).ask()
+    if selected is None:
+        raise typer.Abort()
+    return selected
+
+
+def _init_auth_path_choices() -> list[questionary.Choice]:
+    choices: list[questionary.Choice] = []
+    for status in detect_provider_statuses(os.environ):
+        for option in provider_auth_method_options(status["provider"], env=os.environ):
+            if not option["ready"]:
+                continue
+            choices.append(
+                questionary.Choice(
+                    title=_init_auth_path_choice_title(option),
+                    value={
+                        "provider": option["provider"],
+                        "auth_kind": option["auth_kind"],
+                    },
+                    checked=True,
+                )
+            )
+    return choices
+
+
+def _init_auth_path_choice_title(option: dict[str, object]) -> str:
+    env_vars = option.get("detected_env_vars", [])
+    env_text = ", ".join(env_vars) if isinstance(env_vars, list) and env_vars else "-"
+    return (
+        f"{option['display_name']} ({option['provider']}) - "
+        f"{option['auth_kind']}; env vars: {env_text}"
+    )
+
+
+def _selected_init_model_profile() -> tuple[str | None, str | None, bool]:
+    create_profile = questionary.confirm(
+        "Create a named model profile?",
+        default=False,
+    ).ask()
+    if create_profile is None:
+        raise typer.Abort()
+    if not create_profile:
+        return None, None, False
+
+    name = questionary.text("Profile name:").ask()
+    if name is None:
+        raise typer.Abort()
+    model = questionary.text("Model string (provider:model):").ask()
+    if model is None:
+        raise typer.Abort()
+    set_default = questionary.confirm(
+        "Set this profile as an explicit default?",
+        default=False,
+    ).ask()
+    if set_default is None:
+        raise typer.Abort()
+    return name, model, set_default

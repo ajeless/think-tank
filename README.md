@@ -2,7 +2,7 @@
 
 Think Tank is a local-first idea workspace where a human and multiple AI agents develop ideas into durable, searchable, versioned artifacts.
 
-This repository is being bootstrapped incrementally. The current implementation provides the Python package, CLI entrypoint, test harness, local workspace creation, provider credential diagnostics, explicit provider validation, named model profiles, and a minimal one-model `ask` path that records transcripts.
+This repository is being bootstrapped incrementally. The current implementation provides the Python package, CLI entrypoint, test harness, local workspace creation, guided setup, provider credential diagnostics, explicit provider validation, named model profiles, and a minimal one-model `ask` path that records transcripts.
 
 ## Design Notes
 
@@ -41,6 +41,12 @@ Check which provider credentials Think Tank can see:
 
 ```bash
 think config doctor
+```
+
+Run guided setup for non-secret auth metadata, one optional model profile, and one optional explicit default:
+
+```bash
+think init
 ```
 
 Write non-secret provider configuration from detected credentials:
@@ -99,6 +105,8 @@ my-idea/
 `state.json` starts with `schema_version: 1`, user-supplied project metadata, and intentionally empty top-level collections for the project state.
 
 `think ask` loads the project `state.json` as read-only context, calls the requested `provider:model`, prints the model response, and appends the raw interaction to `transcripts/ask.jsonl`. It does not synthesize, mutate project state, choose default models, run multiple agents, or commit to git.
+
+`think init` is an interactive setup command. It detects ready provider auth paths, lets the user select which ones to record, writes only non-secret auth metadata, and can optionally create one named model profile from a user-entered `provider:model` string. It can also record that profile as an explicit user-authored default. Work commands do not use recorded defaults automatically yet, so `think ask` still requires `--model` or `--model-profile`.
 
 `think config model add <name> --model <provider:model>` stores a user-named model profile in non-secret config. `think ask` can use that profile with `--model-profile <name>`. Model profiles are explicit user choices; Think Tank still does not store or choose a default model, and it does not create fallback policies.
 

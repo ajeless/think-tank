@@ -20,7 +20,7 @@ These command shapes are either implemented or reserved as current direction, no
 | Command shape | Intent |
 |---|---|
 | `think setup` | Tool-level onboarding, credentials guidance, and first-run setup. |
-| `think init` | Future guided setup session for selecting auth methods, model profiles, and explicit user-authored defaults. |
+| `think init` | Guided setup session for selecting auth methods, model profiles, and explicit user-authored defaults. Implemented. |
 | `think config doctor` | Detect provider credentials from the environment without printing secret values. Implemented. |
 | `think config init` | Write non-secret provider configuration from detected credentials. Implemented. |
 | `think config validate --provider <name> --model <provider:model>` | Explicitly validate real provider access for one selected model. Implemented. |
@@ -44,19 +44,31 @@ These command shapes are either implemented or reserved as current direction, no
 
 ## Command Details
 
-### Future Guided Setup
+### `think init`
 
-`think init` is reserved as a possible guided setup command, distinct from `think new`.
+Intent: run an interactive CLI setup session that helps the user configure Think Tank deliberately. It is distinct from `think new`, which creates a local idea workspace.
 
-Intent: run an interactive CLI setup session that helps the user configure Think Tank deliberately. This may include detecting available auth paths, selecting an auth method for a provider, choosing whether to enable subscription-style auth when officially supported, creating model profiles, and writing explicit user-selected defaults if that feature exists later.
+Why it exists: first-run setup crosses several config concerns: provider auth metadata, model profiles, and explicit defaults. A top-level guided command lets the user make those choices in one place while keeping work commands scriptable.
 
-Why it is different from hidden defaults: the user would be making visible choices during a setup command. Persisting those choices is not the same as Think Tank silently choosing a provider, model, auth method, billing path, or fallback at work-command runtime.
+Why it is different from hidden defaults: the user is making visible choices during a setup command. Persisting those choices is not the same as Think Tank silently choosing a provider, model, auth method, billing path, or fallback at work-command runtime.
 
-Current status: reserved, not implemented.
+Current status: implemented.
+
+Current behavior:
+
+- `think init` may prompt because setup commands may be interactive.
+- Detects ready provider auth paths from the current environment.
+- Lets the user select which ready auth paths to record.
+- Writes `~/.config/think-tank/config.toml` by default, or `--config <path>`.
+- Stores provider names, auth kinds, env var names, and auth method records only.
+- Does not store API keys, bearer tokens, refresh tokens, subscription tokens, browser cookies, provider session dumps, or provider secret values.
+- May optionally create one named model profile from a user-entered `provider:model` string.
+- May optionally set that newly created profile as an explicit default model profile.
+- Does not validate provider credentials, call provider APIs, or hit the network.
+- Does not make `think ask` or any other work command use defaults automatically.
 
 Rules to preserve:
 
-- `think init` may prompt because setup commands may be interactive.
 - Work commands must remain non-interactive.
 - Any default written by setup must be explicit user-authored config, not an invented product default.
 - Subscription-style auth may be offered only through official supported provider paths.
