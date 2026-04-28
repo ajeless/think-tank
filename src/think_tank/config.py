@@ -29,6 +29,32 @@ class ConfigInitResult(TypedDict):
     enabled_providers: list[str]
 
 
+class AuthProviderConfig(TypedDict):
+    provider: str
+    auth_kind: str
+    env_vars: list[str]
+
+
+class AuthListResult(TypedDict):
+    config_path: str
+    providers: list[AuthProviderConfig]
+
+
+class AuthRemoveResult(TypedDict):
+    config_path: str
+    removed_provider: str
+    removed: bool
+    enabled_providers: list[str]
+
+
+class ConfigNotFoundError(FileNotFoundError):
+    """Raised when a requested Think Tank config file does not exist."""
+
+
+class ConfigFormatError(ValueError):
+    """Raised when a Think Tank config file has an unsupported shape."""
+
+
 @dataclass(frozen=True)
 class ProviderSpec:
     name: str
@@ -144,6 +170,56 @@ def load_config(config_path: Path) -> dict[str, object]:
     return tomllib.loads(config_path.expanduser().read_text(encoding="utf-8"))
 
 
+def list_config_auth(config_path: Path) -> AuthListResult:
+    resolved_path = config_path.expanduser()
+    config = _load_existing_config(resolved_path)
+    provider_tables = _provider_tables(config)
+    providers = [
+        {
+            "provider": provider,
+            "auth_kind": _auth_kind(provider, provider_tables),
+            "env_vars": _env_vars(provider, provider_tables),
+        }
+        for provider in _enabled_providers(config)
+    ]
+    return {
+        "config_path": str(resolved_path),
+        "providers": providers,
+    }
+
+
+def remove_config_auth(config_path: Path, provider: str) -> AuthRemoveResult:
+    resolved_path = config_path.expanduser()
+    provider = provider.strip().lower()
+    if not provider:
+        raise ValueError("auth remove requires a provider name")
+
+    config = _load_existing_config(resolved_path)
+    enabled_providers = _enabled_providers(config)
+    provider_tables = _provider_tables(config)
+
+    removed = provider in enabled_providers or provider in provider_tables
+    updated_enabled = [name for name in enabled_providers if name != provider]
+    updated_provider_tables = {
+        name: table for name, table in provider_tables.items() if name != provider
+    }
+    resolved_path.write_text(
+        _render_loaded_config(
+            config,
+            enabled_providers=updated_enabled,
+            provider_tables=updated_provider_tables,
+        ),
+        encoding="utf-8",
+    )
+
+    return {
+        "config_path": str(resolved_path),
+        "removed_provider": provider,
+        "removed": removed,
+        "enabled_providers": updated_enabled,
+    }
+
+
 def _provider_status(spec: ProviderSpec, env: Mapping[str, str]) -> ProviderStatus:
     detected = [name for name in spec.env_vars if env.get(name)]
     missing = [name for name in spec.required_env_vars if not env.get(name)]
@@ -191,3 +267,105 @@ def _render_config(statuses: list[ProviderStatus], enabled_providers: list[str])
         ])
 
     return "\n".join(lines)
+
+
+def _load_existing_config(config_path: Path) -> dict[str, object]:
+    if not config_path.exists():
+        raise ConfigNotFoundError(f"config not found: {config_path}")
+    return load_config(config_path)
+
+
+def _enabled_providers(config: Mapping[str, object]) -> list[str]:
+    enabled = config.get("enabled_providers", [])
+    if not isinstance(enabled, list) or not all(
+        isinstance(provider, str) for provider in enabled
+    ):
+        raise ConfigFormatError("config enabled_providers must be a list of strings")
+    return enabled
+
+
+def _provider_tables(config: Mapping[str, object]) -> dict[str, dict[str, object]]:
+    providers = config.get("providers", {})
+    if not isinstance(providers, dict):
+        raise ConfigFormatError("config providers must be a table")
+
+    tables: dict[str, dict[str, object]] = {}
+    for provider, table in providers.items():
+        if not isinstance(provider, str) or not isinstance(table, dict):
+            raise ConfigFormatError("config providers entries must be tables")
+        tables[provider] = table
+    return tables
+
+
+def _auth_kind(provider: str, provider_tables: Mapping[str, Mapping[str, object]]) -> str:
+    value = provider_tables.get(provider, {}).get("auth_kind", "")
+    if not isinstance(value, str):
+        raise ConfigFormatError(f"provider {provider} auth_kind must be a string")
+    return value
+
+
+def _env_vars(provider: str, provider_tables: Mapping[str, Mapping[str, object]]) -> list[str]:
+    value = provider_tables.get(provider, {}).get("env_vars", [])
+    if not isinstance(value, list) or not all(
+        isinstance(env_var, str) for env_var in value
+    ):
+        raise ConfigFormatError(f"provider {provider} env_vars must be a list of strings")
+    return value
+
+
+def _render_loaded_config(
+    config: Mapping[str, object],
+    *,
+    enabled_providers: list[str],
+    provider_tables: Mapping[str, Mapping[str, object]],
+) -> str:
+    lines = [
+        f"schema_version = {_schema_version(config)}",
+        f"secrets = {_toml_string(_secrets(config))}",
+        "",
+        "enabled_providers = [",
+    ]
+    for provider in enabled_providers:
+        lines.append(f"  {_toml_string(provider)},")
+    lines.extend([
+        "]",
+        "",
+    ])
+
+    for provider in enabled_providers:
+        table = provider_tables.get(provider)
+        if table is None:
+            continue
+        lines.extend(
+            [
+                f"[providers.{provider}]",
+                f"auth_kind = {_toml_string(_auth_kind(provider, provider_tables))}",
+                "env_vars = [",
+            ]
+        )
+        for env_var in _env_vars(provider, provider_tables):
+            lines.append(f"  {_toml_string(env_var)},")
+        lines.extend([
+            "]",
+            "",
+        ])
+
+    return "\n".join(lines)
+
+
+def _schema_version(config: Mapping[str, object]) -> int:
+    value = config.get("schema_version", 1)
+    if not isinstance(value, int):
+        raise ConfigFormatError("config schema_version must be an integer")
+    return value
+
+
+def _secrets(config: Mapping[str, object]) -> str:
+    value = config.get("secrets", "environment")
+    if not isinstance(value, str):
+        raise ConfigFormatError("config secrets must be a string")
+    return value
+
+
+def _toml_string(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'

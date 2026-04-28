@@ -12,8 +12,12 @@ import typer
 from rich.console import Console
 
 from .config import (
+    ConfigFormatError,
+    ConfigNotFoundError,
     default_config_path,
     detect_provider_statuses,
+    list_config_auth,
+    remove_config_auth,
     write_detected_provider_config,
 )
 from .engine import (
@@ -40,7 +44,9 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 config_app = typer.Typer(help="Configure non-secret Think Tank preferences.")
+config_auth_app = typer.Typer(help="Manage non-secret provider auth metadata.")
 app.add_typer(config_app, name="config")
+config_app.add_typer(config_auth_app, name="auth")
 console = Console()
 
 
@@ -202,6 +208,70 @@ def config_validate(
     console.print(result["message"])
     if not result["ok"]:
         raise typer.Exit(1)
+
+
+@config_auth_app.command("list")
+def config_auth_list(
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", help="Path to read non-secret Think Tank config."),
+    ] = None,
+    json_output: Annotated[bool, typer.Option("--json", help="Emit JSON output.")] = False,
+) -> None:
+    """List enabled provider auth metadata without printing secret values."""
+
+    config_path = config or default_config_path(os.environ)
+    try:
+        result = list_config_auth(config_path)
+    except (ConfigNotFoundError, ConfigFormatError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    if json_output:
+        typer.echo(json.dumps(result, indent=2, sort_keys=True))
+        return
+
+    console.print(f"Config: {result['config_path']}")
+    if not result["providers"]:
+        console.print("No provider auth metadata is enabled.")
+    for provider in result["providers"]:
+        console.print(
+            f"{provider['provider']}: "
+            f"auth_kind={provider['auth_kind'] or '-'}; "
+            f"env_vars={', '.join(provider['env_vars']) or '-'}"
+        )
+    console.print("Secret values are not stored in Think Tank config.")
+
+
+@config_auth_app.command("remove")
+def config_auth_remove(
+    provider: Annotated[
+        str,
+        typer.Argument(help="Provider auth metadata to remove from Think Tank config."),
+    ],
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", help="Path to update non-secret Think Tank config."),
+    ] = None,
+) -> None:
+    """Remove provider auth metadata from Think Tank config only."""
+
+    config_path = config or default_config_path(os.environ)
+    try:
+        result = remove_config_auth(config_path, provider)
+    except (ConfigNotFoundError, ConfigFormatError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    if result["removed"]:
+        console.print(
+            f"Removed auth metadata for {result['removed_provider']} from "
+            f"{result['config_path']}."
+        )
+    else:
+        console.print(
+            f"No auth metadata for {result['removed_provider']} was present in "
+            f"{result['config_path']}."
+        )
+    console.print("No environment files, keychains, provider accounts, or local models were modified.")
 
 
 def _validation_status_label(status: str) -> str:

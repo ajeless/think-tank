@@ -3,9 +3,12 @@ from pathlib import Path
 import pytest
 
 from think_tank.config import (
+    ConfigNotFoundError,
     default_config_path,
     detect_provider_statuses,
+    list_config_auth,
     load_config,
+    remove_config_auth,
     write_detected_provider_config,
 )
 
@@ -87,6 +90,86 @@ def test_write_detected_provider_config_rejects_unknown_provider(tmp_path: Path)
             env={},
             enabled_providers=["unknown"],
         )
+
+
+def test_list_config_auth_returns_enabled_provider_metadata(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    write_detected_provider_config(
+        config_path,
+        env={
+            "OPENAI_API_KEY": "sk-secret",
+            "GROQ_API_KEY": "gsk-secret",
+        },
+        enabled_providers=["openai", "groq"],
+    )
+
+    result = list_config_auth(config_path)
+
+    assert result == {
+        "config_path": str(config_path),
+        "providers": [
+            {
+                "provider": "openai",
+                "auth_kind": "api_key_env",
+                "env_vars": ["OPENAI_API_KEY"],
+            },
+            {
+                "provider": "groq",
+                "auth_kind": "api_key_env",
+                "env_vars": ["GROQ_API_KEY"],
+            },
+        ],
+    }
+    assert "sk-secret" not in str(result)
+    assert "gsk-secret" not in str(result)
+
+
+def test_list_config_auth_requires_existing_config(tmp_path: Path) -> None:
+    with pytest.raises(ConfigNotFoundError, match="config not found"):
+        list_config_auth(tmp_path / "missing.toml")
+
+
+def test_remove_config_auth_removes_provider_metadata_only(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    write_detected_provider_config(
+        config_path,
+        env={
+            "OPENAI_API_KEY": "sk-secret",
+            "ANTHROPIC_API_KEY": "anthropic-secret",
+            "GROQ_API_KEY": "gsk-secret",
+        },
+        enabled_providers=["openai", "anthropic", "groq"],
+    )
+
+    result = remove_config_auth(config_path, "anthropic")
+
+    assert result == {
+        "config_path": str(config_path),
+        "removed_provider": "anthropic",
+        "removed": True,
+        "enabled_providers": ["openai", "groq"],
+    }
+    parsed = load_config(config_path)
+    assert parsed["enabled_providers"] == ["openai", "groq"]
+    assert "anthropic" not in parsed["providers"]
+    assert parsed["providers"]["openai"]["env_vars"] == ["OPENAI_API_KEY"]
+    assert parsed["providers"]["groq"]["env_vars"] == ["GROQ_API_KEY"]
+    assert "anthropic-secret" not in config_path.read_text(encoding="utf-8")
+
+
+def test_remove_config_auth_is_idempotent_for_absent_provider(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    write_detected_provider_config(
+        config_path,
+        env={"OPENAI_API_KEY": "sk-secret"},
+        enabled_providers=["openai"],
+    )
+
+    result = remove_config_auth(config_path, "groq")
+
+    assert result["removed"] is False
+    assert result["enabled_providers"] == ["openai"]
+    assert load_config(config_path)["enabled_providers"] == ["openai"]
 
 
 def test_default_config_path_uses_xdg_config_home() -> None:

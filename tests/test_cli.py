@@ -196,6 +196,129 @@ def test_cli_config_init_yes_writes_non_secret_config() -> None:
     assert "OPENAI_API_KEY" in config_text
 
 
+def test_cli_config_auth_list_reports_metadata_without_secret_values() -> None:
+    with runner.isolated_filesystem():
+        init_result = runner.invoke(
+            app,
+            ["config", "init", "--yes", "--config", "config.toml"],
+            env={
+                "OPENAI_API_KEY": "sk-secret",
+                "ANTHROPIC_API_KEY": "",
+                "GROQ_API_KEY": "gsk-secret",
+                "OPENROUTER_API_KEY": "",
+            },
+        )
+        result = runner.invoke(app, ["config", "auth", "list", "--config", "config.toml"])
+
+    assert init_result.exit_code == 0
+    assert result.exit_code == 0
+    assert "openai: auth_kind=api_key_env; env_vars=OPENAI_API_KEY" in result.output
+    assert "groq: auth_kind=api_key_env; env_vars=GROQ_API_KEY" in result.output
+    assert "sk-secret" not in result.output
+    assert "gsk-secret" not in result.output
+
+
+def test_cli_config_auth_list_json_reports_metadata_without_secret_values() -> None:
+    with runner.isolated_filesystem():
+        runner.invoke(
+            app,
+            ["config", "init", "--yes", "--config", "config.toml"],
+            env={
+                "OPENAI_API_KEY": "",
+                "ANTHROPIC_API_KEY": "",
+                "GROQ_API_KEY": "gsk-secret",
+                "OPENROUTER_API_KEY": "",
+            },
+        )
+        result = runner.invoke(
+            app,
+            ["config", "auth", "list", "--config", "config.toml", "--json"],
+        )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["providers"] == [
+        {
+            "provider": "ollama",
+            "auth_kind": "local_server",
+            "env_vars": [],
+        },
+        {
+            "provider": "groq",
+            "auth_kind": "api_key_env",
+            "env_vars": ["GROQ_API_KEY"],
+        }
+    ]
+    assert "gsk-secret" not in result.output
+
+
+def test_cli_config_auth_list_reports_missing_config() -> None:
+    with runner.isolated_filesystem():
+        result = runner.invoke(
+            app,
+            ["config", "auth", "list", "--config", "missing.toml"],
+        )
+
+    assert result.exit_code != 0
+    assert "config not found" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_cli_config_auth_remove_updates_config_without_touching_secrets() -> None:
+    with runner.isolated_filesystem():
+        runner.invoke(
+            app,
+            ["config", "init", "--yes", "--config", "config.toml"],
+            env={
+                "OPENAI_API_KEY": "sk-secret",
+                "ANTHROPIC_API_KEY": "",
+                "GROQ_API_KEY": "gsk-secret",
+                "OPENROUTER_API_KEY": "",
+            },
+        )
+        result = runner.invoke(
+            app,
+            ["config", "auth", "remove", "groq", "--config", "config.toml"],
+        )
+        list_result = runner.invoke(
+            app,
+            ["config", "auth", "list", "--config", "config.toml", "--json"],
+        )
+
+    assert result.exit_code == 0
+    assert "Removed auth metadata for groq" in result.output
+    assert "No environment files" in result.output
+    assert "provider accounts" in result.output
+    assert "local models" in result.output
+    assert "gsk-secret" not in result.output
+    payload = json.loads(list_result.output)
+    assert [provider["provider"] for provider in payload["providers"]] == [
+        "openai",
+        "ollama",
+    ]
+
+
+def test_cli_config_auth_remove_is_idempotent_for_absent_provider() -> None:
+    with runner.isolated_filesystem():
+        runner.invoke(
+            app,
+            ["config", "init", "--yes", "--config", "config.toml"],
+            env={
+                "OPENAI_API_KEY": "sk-secret",
+                "ANTHROPIC_API_KEY": "",
+                "GROQ_API_KEY": "",
+                "OPENROUTER_API_KEY": "",
+            },
+        )
+        result = runner.invoke(
+            app,
+            ["config", "auth", "remove", "groq", "--config", "config.toml"],
+        )
+
+    assert result.exit_code == 0
+    assert "No auth metadata for groq was present" in result.output
+
+
 def test_cli_config_validate_reports_success_without_secret_values(monkeypatch) -> None:
     monkeypatch.setattr("think_tank.cli.AisuiteModelClient", FakeAisuiteModelClient)
 
