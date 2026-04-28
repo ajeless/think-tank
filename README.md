@@ -130,6 +130,8 @@ The provider registry distinguishes implemented selectable auth paths from plann
 
 Subscription-backed auth is a roadmap priority for reducing live-testing API costs where providers officially support it. Think Tank will treat product-specific subscription auth, such as coding-tool sign-in flows, as separate integrations unless the provider documents that path for general API clients.
 
+Claude Code subscription auth is one of those product-specific integration candidates. It is not direct `anthropic:<model>` API auth, and Think Tank must not read or store Claude Code credential files or OAuth tokens.
+
 `think config auth add <provider>` creates or updates Think Tank's non-secret auth metadata for one known provider. In interactive mode it can ask the user to choose among implemented ready auth methods when a provider has more than one. It records the selected auth kind, detected env var names, and a non-secret auth method record only. It requires required env vars to be visible for API-key providers, supports local Ollama metadata without secrets, and can run non-interactively with `--yes`.
 
 `think config auth remove <provider>` removes Think Tank's non-secret auth metadata only. It does not edit shell files, delete environment variables, change provider account settings, remove keychain entries, or delete local Ollama models.
