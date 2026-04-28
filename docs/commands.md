@@ -23,10 +23,10 @@ These command shapes are either implemented or reserved as current direction, no
 | `think config doctor` | Detect provider credentials from the environment without printing secret values. Implemented. |
 | `think config init` | Write non-secret provider configuration from detected credentials. Implemented. |
 | `think config validate --provider <name> --model <provider:model>` | Explicitly validate real provider access for one selected model. Implemented. |
-| `think config auth doctor` | Inspect configured/detected auth paths without printing secret values. |
-| `think config auth add <provider>` | Add or enable a provider auth path through setup-only guidance. |
-| `think config auth list` | List enabled provider auth metadata without secrets. |
-| `think config auth remove <provider>` | Remove or disable a provider auth path from Think Tank config. |
+| `think config auth doctor` | Inspect configured/detected auth paths without printing secret values. Reserved. |
+| `think config auth add <provider>` | Add or enable a provider auth path through setup-only guidance. Reserved. |
+| `think config auth list` | List enabled provider auth metadata without secrets. Implemented. |
+| `think config auth remove <provider>` | Remove or disable a provider auth path from Think Tank config. Implemented. |
 | `think new <path> --name <name>` | Create a local idea project/workspace. Implemented. |
 | `think ask "<prompt>" --project <path> --model <provider:model>` | Run a single non-interactive model interaction and record its transcript. Implemented. |
 | `think elaborate ...` | Capture a definition, example, clarification, or related note. |
@@ -84,26 +84,40 @@ Intent: manage provider auth metadata without storing provider secrets.
 
 Why it exists: `config init` is a first-pass setup command. As auth support grows to include multiple auth methods per provider, official OAuth/device flows, local servers, and explicit fallback policies, auth needs a focused namespace.
 
-Current status: reserved, not implemented.
+Current status: partially implemented. `auth list` and `auth remove` are implemented. `auth doctor` and `auth add` are reserved.
 
 Reserved commands:
 
 | Command | Intent |
 |---|---|
-| `think config auth doctor` | Show detected and configured auth paths without printing secret values. |
+| `think config auth doctor` | Show detected and configured auth paths without printing secret values. Reserved. |
 | `think config auth add <provider>` | Add or enable an auth path for a provider. May prompt because it is a setup command. |
-| `think config auth list` | Show enabled provider auth metadata, including auth kind and env var names, without secret values. |
-| `think config auth remove <provider>` | Remove or disable a provider auth path from Think Tank config. |
+| `think config auth list` | Show enabled provider auth metadata, including auth kind and env var names, without secret values. Implemented. |
+| `think config auth remove <provider>` | Remove or disable a provider auth path from Think Tank config. Implemented. |
 
 Future behavior:
 
 - `auth add` may prompt interactively for setup choices, but it must not prompt inside work commands.
 - `auth add` may record provider names, auth kinds, env var names, and non-secret preferences.
 - `auth add` must not store API keys, bearer tokens, refresh tokens, subscription tokens, browser cookies, or provider session dumps.
-- `auth remove` should remove Think Tank's non-secret auth metadata. It should not delete user-managed env files, shell config, keychain entries, provider account settings, or local Ollama models.
 - `auth list` should make any user-authored fallback policy visible if fallback policies are added later.
 - No command may silently switch from subscription/OAuth-style auth to API-key billing.
 - No command may silently fall back from direct provider credentials to aggregator credentials.
+
+Current `auth list` behavior:
+
+- Reads `~/.config/think-tank/config.toml` by default, or `--config <path>`.
+- Prints enabled providers, auth kinds, and env var names.
+- Supports `--json` for machine-readable output.
+- Does not print or read secret values.
+
+Current `auth remove` behavior:
+
+- Reads and rewrites `~/.config/think-tank/config.toml` by default, or `--config <path>`.
+- Removes the provider from `enabled_providers`.
+- Removes Think Tank's `[providers.<provider>]` metadata table.
+- Is idempotent when the provider is absent.
+- Does not delete user-managed env files, shell config, keychain entries, provider account settings, or local Ollama models.
 
 ### `think config validate --provider <name> --model <provider:model>`
 
