@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Treat this AGENTS.md as a living document that itself will change over over time.
+Treat this AGENTS.md as a living document that itself will change over time.
 
 ## What Think Tank is
 
@@ -22,7 +22,7 @@ Start with this AGENTS.md. Then read local docs that are relevant to the work:
 - `docs/architecture.md` — active architecture notes and engine/CLI boundaries.
 - `docs/commands.md` — active command intent, reserved syntax, and naming questions.
 
-Then reat the external docs at:
+Then read the external docs at:
 
 - Inspiration: https://github.com/ajeless/deliberation-room
 - Direction: https://github.com/ajeless/docs/tree/main/think_tank
