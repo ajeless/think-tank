@@ -43,6 +43,14 @@ class FakeOllamaHttpModelRegistry:
         return self.models
 
 
+class FakeQuestionaryResponse:
+    def __init__(self, answer) -> None:
+        self.answer = answer
+
+    def ask(self):
+        return self.answer
+
+
 def test_cli_help_exits_successfully() -> None:
     result = runner.invoke(app, ["--help"])
 
@@ -573,6 +581,98 @@ def test_cli_config_auth_add_yes_adds_ollama_without_secret_values() -> None:
             ],
         }
     ]
+
+
+def test_cli_config_auth_add_interactive_confirms_single_ready_method(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "think_tank.cli.questionary.confirm",
+        lambda *args, **kwargs: FakeQuestionaryResponse(True),
+    )
+
+    with runner.isolated_filesystem():
+        result = runner.invoke(
+            app,
+            ["config", "auth", "add", "ollama", "--config", "config.toml"],
+        )
+        payload = json.loads(
+            runner.invoke(
+                app,
+                ["config", "auth", "list", "--config", "config.toml", "--json"],
+            ).output
+        )
+
+    assert result.exit_code == 0
+    assert "Added auth metadata for ollama" in result.output
+    assert payload["providers"][0]["auth_kind"] == "local_server"
+    assert payload["providers"][0]["auth_methods"] == [
+        {
+            "auth_kind": "local_server",
+            "env_vars": [],
+        }
+    ]
+
+
+def test_cli_config_auth_add_interactive_selects_between_ready_methods(
+    monkeypatch,
+) -> None:
+    captured = {}
+
+    def fake_add_config_auth(config_path, provider, *, env, auth_kind=None):
+        captured["auth_kind"] = auth_kind
+        return {
+            "config_path": str(config_path),
+            "provider": provider,
+            "added": True,
+            "auth_kind": auth_kind,
+            "env_vars": ["TESTAI_URL"],
+            "enabled_providers": [provider],
+        }
+
+    monkeypatch.setattr(
+        "think_tank.cli.provider_auth_method_options",
+        lambda provider, *, env: [
+            {
+                "provider": provider,
+                "display_name": "Test AI",
+                "auth_kind": "api_key_env",
+                "ready": True,
+                "detected_env_vars": ["TESTAI_API_KEY"],
+                "required_env_vars": ["TESTAI_API_KEY"],
+                "missing_env_vars": [],
+                "notes": [],
+            },
+            {
+                "provider": provider,
+                "display_name": "Test AI",
+                "auth_kind": "local_server",
+                "ready": True,
+                "detected_env_vars": ["TESTAI_URL"],
+                "required_env_vars": [],
+                "missing_env_vars": [],
+                "notes": [],
+            },
+        ],
+    )
+    monkeypatch.setattr(
+        "think_tank.cli.questionary.select",
+        lambda *args, **kwargs: FakeQuestionaryResponse("local_server"),
+    )
+    monkeypatch.setattr("think_tank.cli.add_config_auth", fake_add_config_auth)
+
+    with runner.isolated_filesystem():
+        result = runner.invoke(
+            app,
+            ["config", "auth", "add", "testai", "--config", "config.toml"],
+            env={"TESTAI_API_KEY": "secret-key", "TESTAI_URL": "http://localhost"},
+        )
+
+    assert result.exit_code == 0
+    assert captured["auth_kind"] == "local_server"
+    assert "Auth kind: local_server" in result.output
+    assert "Env vars: TESTAI_URL" in result.output
+    assert "secret-key" not in result.output
 
 
 def test_cli_config_auth_remove_updates_config_without_touching_secrets() -> None:

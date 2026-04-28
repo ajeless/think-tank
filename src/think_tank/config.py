@@ -24,6 +24,17 @@ class ProviderStatus(TypedDict):
     notes: list[str]
 
 
+class ProviderAuthMethodOption(TypedDict):
+    provider: str
+    display_name: str
+    auth_kind: str
+    ready: bool
+    detected_env_vars: list[str]
+    required_env_vars: list[str]
+    missing_env_vars: list[str]
+    notes: list[str]
+
+
 class ConfigInitResult(TypedDict):
     config_path: str
     enabled_providers: list[str]
@@ -123,6 +134,14 @@ class ModelProfileNotFoundError(LookupError):
 
 
 @dataclass(frozen=True)
+class ProviderAuthMethodSpec:
+    auth_kind: str
+    env_vars: tuple[str, ...] = ()
+    required_env_vars: tuple[str, ...] = ()
+    notes: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class ProviderSpec:
     name: str
     display_name: str
@@ -130,6 +149,7 @@ class ProviderSpec:
     env_vars: tuple[str, ...] = ()
     required_env_vars: tuple[str, ...] = ()
     notes: tuple[str, ...] = ()
+    auth_methods: tuple[ProviderAuthMethodSpec, ...] = ()
 
 
 PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
@@ -206,6 +226,21 @@ def default_config_path(env: Mapping[str, str] | None = None) -> Path:
 
 def detect_provider_statuses(env: Mapping[str, str]) -> list[ProviderStatus]:
     return [_provider_status(spec, env) for spec in PROVIDER_SPECS]
+
+
+def provider_auth_method_options(
+    provider: str,
+    *,
+    env: Mapping[str, str],
+) -> list[ProviderAuthMethodOption]:
+    provider = provider.strip().lower()
+    if not provider:
+        raise ValueError("provider name is required")
+    spec = _provider_spec(provider)
+    return [
+        _provider_auth_method_option(spec, method, env)
+        for method in _provider_auth_method_specs(spec)
+    ]
 
 
 def write_detected_provider_config(
@@ -387,18 +422,18 @@ def add_config_auth(
     provider: str,
     *,
     env: Mapping[str, str],
+    auth_kind: str | None = None,
 ) -> AuthAddResult:
     resolved_path = config_path.expanduser()
     provider = provider.strip().lower()
     if not provider:
         raise ValueError("auth add requires a provider name")
 
-    spec = _provider_spec(provider)
-    status = _provider_status(spec, env)
-    if status["missing_env_vars"]:
+    option = _selected_auth_method_option(provider, auth_kind=auth_kind, env=env)
+    if option["missing_env_vars"]:
         raise ProviderAuthNotReadyError(
             "missing required environment variable(s): "
-            + ", ".join(status["missing_env_vars"])
+            + ", ".join(option["missing_env_vars"])
         )
 
     if resolved_path.exists():
@@ -417,12 +452,12 @@ def add_config_auth(
 
     updated_provider_tables = dict(provider_tables)
     updated_provider_tables[provider] = {
-        "auth_kind": status["auth_kind"],
-        "env_vars": status["detected_env_vars"],
+        "auth_kind": option["auth_kind"],
+        "env_vars": option["detected_env_vars"],
         "auth_methods": [
             {
-                "auth_kind": status["auth_kind"],
-                "env_vars": status["detected_env_vars"],
+                "auth_kind": option["auth_kind"],
+                "env_vars": option["detected_env_vars"],
             }
         ],
     }
@@ -441,8 +476,8 @@ def add_config_auth(
         "config_path": str(resolved_path),
         "provider": provider,
         "added": added,
-        "auth_kind": status["auth_kind"],
-        "env_vars": status["detected_env_vars"],
+        "auth_kind": option["auth_kind"],
+        "env_vars": option["detected_env_vars"],
         "enabled_providers": updated_enabled,
     }
 
@@ -516,18 +551,74 @@ def doctor_config_auth(config_path: Path, *, env: Mapping[str, str]) -> AuthDoct
 
 
 def _provider_status(spec: ProviderSpec, env: Mapping[str, str]) -> ProviderStatus:
-    detected = [name for name in spec.env_vars if env.get(name)]
-    missing = [name for name in spec.required_env_vars if not env.get(name)]
+    method = _provider_auth_method_specs(spec)[0]
+    detected = [name for name in method.env_vars if env.get(name)]
+    missing = [name for name in method.required_env_vars if not env.get(name)]
     return {
         "provider": spec.name,
         "display_name": spec.display_name,
         "ready": not missing,
-        "auth_kind": spec.auth_kind,
+        "auth_kind": method.auth_kind,
         "detected_env_vars": detected,
-        "required_env_vars": list(spec.required_env_vars),
+        "required_env_vars": list(method.required_env_vars),
         "missing_env_vars": missing,
-        "notes": list(spec.notes),
+        "notes": list(method.notes),
     }
+
+
+def _provider_auth_method_option(
+    spec: ProviderSpec,
+    method: ProviderAuthMethodSpec,
+    env: Mapping[str, str],
+) -> ProviderAuthMethodOption:
+    detected = [name for name in method.env_vars if env.get(name)]
+    missing = [name for name in method.required_env_vars if not env.get(name)]
+    return {
+        "provider": spec.name,
+        "display_name": spec.display_name,
+        "auth_kind": method.auth_kind,
+        "ready": not missing,
+        "detected_env_vars": detected,
+        "required_env_vars": list(method.required_env_vars),
+        "missing_env_vars": missing,
+        "notes": list(method.notes),
+    }
+
+
+def _provider_auth_method_specs(spec: ProviderSpec) -> tuple[ProviderAuthMethodSpec, ...]:
+    if spec.auth_methods:
+        return spec.auth_methods
+    return (
+        ProviderAuthMethodSpec(
+            auth_kind=spec.auth_kind,
+            env_vars=spec.env_vars,
+            required_env_vars=spec.required_env_vars,
+            notes=spec.notes,
+        ),
+    )
+
+
+def _selected_auth_method_option(
+    provider: str,
+    *,
+    auth_kind: str | None,
+    env: Mapping[str, str],
+) -> ProviderAuthMethodOption:
+    options = provider_auth_method_options(provider, env=env)
+    if auth_kind is None:
+        return options[0]
+
+    auth_kind = auth_kind.strip()
+    if not auth_kind:
+        raise ValueError("auth kind is required")
+
+    for option in options:
+        if option["auth_kind"] == auth_kind:
+            return option
+    supported = ", ".join(option["auth_kind"] for option in options)
+    raise ValueError(
+        f"unsupported auth kind for {provider}: {auth_kind} (supported: {supported})"
+    )
 
 
 def _provider_spec(provider: str) -> ProviderSpec:

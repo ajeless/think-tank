@@ -5,7 +5,9 @@ import pytest
 from think_tank.config import (
     ConfigNotFoundError,
     ModelProfileNotFoundError,
+    ProviderAuthMethodSpec,
     ProviderAuthNotReadyError,
+    ProviderSpec,
     add_config_auth,
     add_model_profile,
     default_config_path,
@@ -14,6 +16,7 @@ from think_tank.config import (
     list_config_auth,
     list_model_profiles,
     load_config,
+    provider_auth_method_options,
     remove_config_auth,
     remove_model_profile,
     resolve_model_profile,
@@ -59,6 +62,61 @@ def test_ollama_is_ready_without_secret() -> None:
     assert ollama["ready"] is True
     assert ollama["auth_kind"] == "local_server"
     assert ollama["detected_env_vars"] == []
+
+
+def test_provider_auth_method_options_report_ready_methods_without_secrets(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "think_tank.config.PROVIDER_SPECS",
+        (
+            ProviderSpec(
+                name="testai",
+                display_name="Test AI",
+                auth_kind="api_key_env",
+                auth_methods=(
+                    ProviderAuthMethodSpec(
+                        auth_kind="api_key_env",
+                        env_vars=("TESTAI_API_KEY",),
+                        required_env_vars=("TESTAI_API_KEY",),
+                    ),
+                    ProviderAuthMethodSpec(
+                        auth_kind="local_server",
+                        env_vars=("TESTAI_URL",),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    options = provider_auth_method_options(
+        "testai",
+        env={"TESTAI_API_KEY": "secret-key", "TESTAI_URL": "http://localhost"},
+    )
+
+    assert options == [
+        {
+            "provider": "testai",
+            "display_name": "Test AI",
+            "auth_kind": "api_key_env",
+            "ready": True,
+            "detected_env_vars": ["TESTAI_API_KEY"],
+            "required_env_vars": ["TESTAI_API_KEY"],
+            "missing_env_vars": [],
+            "notes": [],
+        },
+        {
+            "provider": "testai",
+            "display_name": "Test AI",
+            "auth_kind": "local_server",
+            "ready": True,
+            "detected_env_vars": ["TESTAI_URL"],
+            "required_env_vars": [],
+            "missing_env_vars": [],
+            "notes": [],
+        },
+    ]
+    assert "secret-key" not in str(options)
 
 
 def test_write_detected_provider_config_stores_no_secret_values(tmp_path: Path) -> None:
@@ -184,6 +242,100 @@ def test_add_config_auth_creates_config_for_ready_env_provider(tmp_path: Path) -
             "env_vars": ["OPENAI_API_KEY"],
         }
     ]
+
+
+def test_add_config_auth_can_select_supported_auth_kind(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "think_tank.config.PROVIDER_SPECS",
+        (
+            ProviderSpec(
+                name="testai",
+                display_name="Test AI",
+                auth_kind="api_key_env",
+                auth_methods=(
+                    ProviderAuthMethodSpec(
+                        auth_kind="api_key_env",
+                        env_vars=("TESTAI_API_KEY",),
+                        required_env_vars=("TESTAI_API_KEY",),
+                    ),
+                    ProviderAuthMethodSpec(
+                        auth_kind="local_server",
+                        env_vars=("TESTAI_URL",),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    result = add_config_auth(
+        tmp_path / "config.toml",
+        "testai",
+        env={"TESTAI_API_KEY": "secret-key", "TESTAI_URL": "http://localhost"},
+        auth_kind="local_server",
+    )
+
+    assert result["auth_kind"] == "local_server"
+    assert result["env_vars"] == ["TESTAI_URL"]
+    raw_config = (tmp_path / "config.toml").read_text(encoding="utf-8")
+    assert "secret-key" not in raw_config
+    parsed = load_config(tmp_path / "config.toml")
+    assert parsed["providers"]["testai"]["auth_methods"] == [
+        {
+            "auth_kind": "local_server",
+            "env_vars": ["TESTAI_URL"],
+        }
+    ]
+
+
+def test_add_config_auth_without_selection_uses_primary_method(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "think_tank.config.PROVIDER_SPECS",
+        (
+            ProviderSpec(
+                name="testai",
+                display_name="Test AI",
+                auth_kind="api_key_env",
+                auth_methods=(
+                    ProviderAuthMethodSpec(
+                        auth_kind="api_key_env",
+                        env_vars=("TESTAI_API_KEY",),
+                        required_env_vars=("TESTAI_API_KEY",),
+                    ),
+                    ProviderAuthMethodSpec(
+                        auth_kind="local_server",
+                        env_vars=("TESTAI_URL",),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    result = add_config_auth(
+        tmp_path / "config.toml",
+        "testai",
+        env={"TESTAI_API_KEY": "secret-key", "TESTAI_URL": "http://localhost"},
+    )
+
+    assert result["auth_kind"] == "api_key_env"
+    assert result["env_vars"] == ["TESTAI_API_KEY"]
+
+
+def test_add_config_auth_rejects_unsupported_auth_kind(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="unsupported auth kind for openai"):
+        add_config_auth(
+            tmp_path / "config.toml",
+            "openai",
+            env={"OPENAI_API_KEY": "sk-secret"},
+            auth_kind="official_oauth",
+        )
 
 
 def test_add_config_auth_adds_ollama_without_secret(tmp_path: Path) -> None:
