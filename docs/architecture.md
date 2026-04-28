@@ -65,7 +65,7 @@ Validation must use the same no-middleman rules as model calls:
 
 Ollama is local-provider validation rather than credential validation. The validator checks local server availability using `OLLAMA_API_URL` or the default `http://localhost:11434`, then verifies that the requested model appears in the local model registry.
 
-Provider metadata is owned by the provider registry layer, not by CLI command code or config file mutation code. Engine behavior and config behavior may both depend on the packaged provider registry, but the registry should stay focused on supported provider names, auth method metadata, and environment-based readiness detection.
+Provider metadata is owned by the provider registry layer, not by CLI command code or config file mutation code. Engine behavior and config behavior may both depend on the packaged provider registry, but the registry should stay focused on supported provider names, auth method metadata, and environment-based readiness detection. Packaged provider specs use explicit auth method records as their only auth shape.
 
 User config file concerns are separate from provider metadata. Config storage helpers own default config path resolution, TOML loading errors, text writing, and TOML string escaping. Higher-level config behavior owns the meaning of auth records, model profiles, and explicit defaults.
 
