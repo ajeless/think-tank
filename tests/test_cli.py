@@ -218,6 +218,65 @@ def test_cli_config_auth_list_reports_metadata_without_secret_values() -> None:
     assert "gsk-secret" not in result.output
 
 
+def test_cli_config_auth_doctor_reports_detection_without_config() -> None:
+    with runner.isolated_filesystem():
+        result = runner.invoke(
+            app,
+            ["config", "auth", "doctor", "--config", "missing.toml"],
+            env={
+                "OPENAI_API_KEY": "",
+                "ANTHROPIC_API_KEY": "",
+                "GROQ_API_KEY": "gsk-secret",
+                "OPENROUTER_API_KEY": "",
+            },
+        )
+
+    assert result.exit_code == 0
+    assert "Config: missing.toml (not found)" in result.output
+    assert "Groq (groq): configured=no; detected=yes; ready=yes" in result.output
+    assert "detected_env_vars=GROQ_API_KEY" in result.output
+    assert "gsk-secret" not in result.output
+
+
+def test_cli_config_auth_doctor_json_combines_config_and_detection() -> None:
+    with runner.isolated_filesystem():
+        runner.invoke(
+            app,
+            ["config", "init", "--yes", "--config", "config.toml"],
+            env={
+                "OPENAI_API_KEY": "sk-secret",
+                "ANTHROPIC_API_KEY": "",
+                "GROQ_API_KEY": "gsk-secret",
+                "OPENROUTER_API_KEY": "",
+            },
+        )
+        result = runner.invoke(
+            app,
+            ["config", "auth", "doctor", "--config", "config.toml", "--json"],
+            env={
+                "OPENAI_API_KEY": "",
+                "ANTHROPIC_API_KEY": "",
+                "GROQ_API_KEY": "gsk-secret",
+                "OPENROUTER_API_KEY": "",
+            },
+        )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["config_found"] is True
+    openai = _doctor_provider(payload, "openai")
+    assert openai["configured"] is True
+    assert openai["detected"] is False
+    assert openai["configured_env_vars"] == ["OPENAI_API_KEY"]
+    assert openai["missing_env_vars"] == ["OPENAI_API_KEY"]
+    groq = _doctor_provider(payload, "groq")
+    assert groq["configured"] is True
+    assert groq["detected"] is True
+    assert groq["detected_env_vars"] == ["GROQ_API_KEY"]
+    assert "sk-secret" not in result.output
+    assert "gsk-secret" not in result.output
+
+
 def test_cli_config_auth_list_json_reports_metadata_without_secret_values() -> None:
     with runner.isolated_filesystem():
         runner.invoke(
@@ -408,3 +467,7 @@ def test_cli_config_validate_checks_ollama_model_with_fake_registry(monkeypatch)
     assert result.exit_code == 0
     assert "Provider: ollama" in result.output
     assert "Status: success" in result.output
+
+
+def _doctor_provider(payload, provider: str):
+    return next(item for item in payload["providers"] if item["provider"] == provider)

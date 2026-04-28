@@ -16,6 +16,7 @@ from .config import (
     ConfigNotFoundError,
     default_config_path,
     detect_provider_statuses,
+    doctor_config_auth,
     list_config_auth,
     remove_config_auth,
     write_detected_provider_config,
@@ -208,6 +209,45 @@ def config_validate(
     console.print(result["message"])
     if not result["ok"]:
         raise typer.Exit(1)
+
+
+@config_auth_app.command("doctor")
+def config_auth_doctor(
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", help="Path to read non-secret Think Tank config."),
+    ] = None,
+    json_output: Annotated[bool, typer.Option("--json", help="Emit JSON output.")] = False,
+) -> None:
+    """Inspect configured and detected auth metadata without provider API calls."""
+
+    config_path = config or default_config_path(os.environ)
+    try:
+        result = doctor_config_auth(config_path, env=os.environ)
+    except ConfigFormatError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    if json_output:
+        typer.echo(json.dumps(result, indent=2, sort_keys=True))
+        return
+
+    console.print(
+        f"Config: {result['config_path']} "
+        f"({'found' if result['config_found'] else 'not found'})"
+    )
+    for provider in result["providers"]:
+        console.print(
+            f"{provider['display_name']} ({provider['provider']}): "
+            f"configured={'yes' if provider['configured'] else 'no'}; "
+            f"detected={'yes' if provider['detected'] else 'no'}; "
+            f"ready={'yes' if provider['ready'] else 'no'}; "
+            f"configured_env_vars={', '.join(provider['configured_env_vars']) or '-'}; "
+            f"detected_env_vars={', '.join(provider['detected_env_vars']) or '-'}; "
+            f"missing_env_vars={', '.join(provider['missing_env_vars']) or '-'}"
+        )
+        for note in provider["notes"]:
+            console.print(f"  note: {note}")
+    console.print("Secret values are read from the environment and are never printed.")
 
 
 @config_auth_app.command("list")

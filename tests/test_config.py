@@ -6,6 +6,7 @@ from think_tank.config import (
     ConfigNotFoundError,
     default_config_path,
     detect_provider_statuses,
+    doctor_config_auth,
     list_config_auth,
     load_config,
     remove_config_auth,
@@ -129,6 +130,90 @@ def test_list_config_auth_requires_existing_config(tmp_path: Path) -> None:
         list_config_auth(tmp_path / "missing.toml")
 
 
+def test_doctor_config_auth_reports_detection_without_config(tmp_path: Path) -> None:
+    result = doctor_config_auth(
+        tmp_path / "missing.toml",
+        env={"GROQ_API_KEY": "gsk-secret"},
+    )
+
+    assert result["config_path"] == str(tmp_path / "missing.toml")
+    assert result["config_found"] is False
+    groq = _doctor_provider(result, "groq")
+    assert groq["configured"] is False
+    assert groq["detected"] is True
+    assert groq["ready"] is True
+    assert groq["detected_env_vars"] == ["GROQ_API_KEY"]
+    assert "gsk-secret" not in str(result)
+
+
+def test_doctor_config_auth_combines_configured_and_detected_metadata(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.toml"
+    write_detected_provider_config(
+        config_path,
+        env={
+            "OPENAI_API_KEY": "sk-secret",
+            "GROQ_API_KEY": "gsk-secret",
+        },
+        enabled_providers=["openai", "groq"],
+    )
+
+    result = doctor_config_auth(
+        config_path,
+        env={
+            "GROQ_API_KEY": "gsk-secret",
+        },
+    )
+
+    assert result["config_found"] is True
+    openai = _doctor_provider(result, "openai")
+    assert openai["configured"] is True
+    assert openai["detected"] is False
+    assert openai["ready"] is False
+    assert openai["configured_env_vars"] == ["OPENAI_API_KEY"]
+    assert openai["missing_env_vars"] == ["OPENAI_API_KEY"]
+
+    groq = _doctor_provider(result, "groq")
+    assert groq["configured"] is True
+    assert groq["detected"] is True
+    assert groq["ready"] is True
+    assert groq["configured_env_vars"] == ["GROQ_API_KEY"]
+    assert groq["detected_env_vars"] == ["GROQ_API_KEY"]
+    assert "sk-secret" not in str(result)
+    assert "gsk-secret" not in str(result)
+
+
+def test_doctor_config_auth_includes_unknown_configured_provider(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "schema_version = 1",
+                'secrets = "environment"',
+                'enabled_providers = ["futureai"]',
+                "",
+                "[providers.futureai]",
+                'auth_kind = "api_key_env"',
+                'env_vars = ["FUTUREAI_API_KEY"]',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = doctor_config_auth(config_path, env={})
+
+    futureai = _doctor_provider(result, "futureai")
+    assert futureai["configured"] is True
+    assert futureai["detected"] is False
+    assert futureai["ready"] is False
+    assert futureai["configured_env_vars"] == ["FUTUREAI_API_KEY"]
+    assert futureai["notes"] == [
+        "Provider is configured but is not in the packaged provider set."
+    ]
+
+
 def test_remove_config_auth_removes_provider_metadata_only(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     write_detected_provider_config(
@@ -180,3 +265,7 @@ def test_default_config_path_uses_xdg_config_home() -> None:
 
 def _status(statuses, provider: str):
     return next(status for status in statuses if status["provider"] == provider)
+
+
+def _doctor_provider(result, provider: str):
+    return next(item for item in result["providers"] if item["provider"] == provider)
