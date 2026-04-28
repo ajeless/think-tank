@@ -28,10 +28,12 @@ Model calls are engine behavior behind a testable client boundary. The engine ow
 Provider and model selection must not be hardcoded. Work commands that call models must get the model from one of these user-supplied sources:
 
 - Explicit command input such as `--model <provider:model>`.
-- Future user configuration.
+- User configuration such as a named model profile.
 - Future project or agent configuration.
 
 If no model is supplied through one of those sources, the engine must fail with a clear error instead of picking a default provider, default model, fallback model, or "best" model on the user's behalf.
+
+Named model profiles are explicit user configuration, not defaults. A profile may shorten a command like `think ask ... --model-profile fast`, but Think Tank still must not select that profile automatically or fall back to another profile if the selected one fails.
 
 The current aisuite-backed client is intentionally thin. Unit tests should use a fake model client so test runs do not hit provider APIs or depend on network access.
 
@@ -40,6 +42,8 @@ The packaged provider set is intentionally limited to the providers in active ea
 ## Provider Onboarding And Secrets
 
 Think Tank detects provider credentials from the user's environment and may write non-secret configuration under `~/.config/think-tank/config.toml`. Config files may record enabled provider names, auth kinds, and env var names. They must not contain API keys, subscription tokens, bearer tokens, or project-local secrets.
+
+Config files may also record named model profiles as explicit `provider:model` strings. Model profiles must not become implicit defaults, hidden fallback chains, or credential selectors.
 
 Setup commands may guide users through provider detection and configuration. Work commands must stay non-interactive and must not prompt for credentials mid-run.
 

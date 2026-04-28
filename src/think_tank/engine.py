@@ -194,7 +194,9 @@ def ask_project(
     if not prompt.strip():
         raise MissingPromptError("ask requires a non-empty prompt argument")
     if model is None or not model.strip():
-        raise MissingModelError("ask requires --model <provider:model>")
+        raise MissingModelError(
+            "ask requires --model <provider:model> or --model-profile <name>"
+        )
 
     resolved_root = project_root.expanduser()
     state_path = resolved_root / "state.json"

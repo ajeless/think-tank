@@ -27,8 +27,12 @@ These command shapes are either implemented or reserved as current direction, no
 | `think config auth add <provider>` | Add or enable a provider auth path through setup-only guidance. Implemented. |
 | `think config auth list` | List enabled provider auth metadata without secrets. Implemented. |
 | `think config auth remove <provider>` | Remove or disable a provider auth path from Think Tank config. Implemented. |
+| `think config model add <name> --model <provider:model>` | Store a named non-secret model profile. Implemented. |
+| `think config model list` | List named model profiles. Implemented. |
+| `think config model remove <name>` | Remove a named model profile. Implemented. |
 | `think new <path> --name <name>` | Create a local idea project/workspace. Implemented. |
 | `think ask "<prompt>" --project <path> --model <provider:model>` | Run a single non-interactive model interaction and record its transcript. Implemented. |
+| `think ask "<prompt>" --project <path> --model-profile <name>` | Run a single non-interactive model interaction using a named model profile. Implemented. |
 | `think elaborate ...` | Capture a definition, example, clarification, or related note. |
 | `think synthesize ...` | Consolidate agent outputs into durable state or summaries. |
 | `think review ...` | Inspect stale, unresolved, or questionable project state. |
@@ -139,6 +143,24 @@ Current `auth remove` behavior:
 - Is idempotent when the provider is absent.
 - Does not delete user-managed env files, shell config, keychain entries, provider account settings, or local Ollama models.
 
+### `think config model ...`
+
+Intent: manage user-named model profiles without creating default models or fallback policies.
+
+Why it exists: full `provider:model` strings are useful for explicitness but tedious to repeat. Named profiles let users shorten repeated work-command invocations while preserving the rule that the model choice came from user-supplied configuration.
+
+Current status: implemented.
+
+Current behavior:
+
+- `think config model add <name> --model <provider:model>` creates or updates a profile.
+- `think config model list` prints configured profiles and supports `--json`.
+- `think config model remove <name>` removes a profile and is idempotent when the profile is absent.
+- Reads and rewrites `~/.config/think-tank/config.toml` by default, or `--config <path>`.
+- Stores profile names and explicit `provider:model` strings only.
+- Requires model strings to use a packaged provider prefix.
+- Does not validate provider credentials, call provider APIs, store provider secrets, choose a default model, or create fallback policies.
+
 ### `think config validate --provider <name> --model <provider:model>`
 
 Intent: explicitly verify that Think Tank can reach one real provider/model path.
@@ -167,7 +189,9 @@ Current status: implemented.
 Current behavior:
 
 - Loads `<path>/state.json` as read-only context.
-- Requires an explicit `--model <provider:model>` value.
+- Requires either an explicit `--model <provider:model>` value or a user-configured `--model-profile <name>`.
+- Rejects commands that pass both `--model` and `--model-profile`.
+- Resolves model profiles from `~/.config/think-tank/config.toml` by default, or `--config <path>`.
 - Calls the model client once.
 - Prints the model response.
 - Appends one JSONL row to `<path>/transcripts/ask.jsonl`.
@@ -187,6 +211,7 @@ Current non-goals:
 
 - No default provider or model.
 - No fallback provider or model.
+- No automatic model profile selection.
 - No multi-agent fanout.
 - No synthesis.
 - No state mutation.

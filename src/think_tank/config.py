@@ -76,6 +76,29 @@ class AuthDoctorResult(TypedDict):
     providers: list[AuthDoctorProvider]
 
 
+class ModelProfile(TypedDict):
+    name: str
+    model: str
+
+
+class ModelAddResult(TypedDict):
+    config_path: str
+    name: str
+    model: str
+    added: bool
+
+
+class ModelListResult(TypedDict):
+    config_path: str
+    profiles: list[ModelProfile]
+
+
+class ModelRemoveResult(TypedDict):
+    config_path: str
+    removed_profile: str
+    removed: bool
+
+
 class ConfigNotFoundError(FileNotFoundError):
     """Raised when a requested Think Tank config file does not exist."""
 
@@ -86,6 +109,10 @@ class ConfigFormatError(ValueError):
 
 class ProviderAuthNotReadyError(ValueError):
     """Raised when a provider auth path is known but not ready to record."""
+
+
+class ModelProfileNotFoundError(LookupError):
+    """Raised when a requested model profile is not configured."""
 
 
 @dataclass(frozen=True)
@@ -189,9 +216,30 @@ def write_detected_provider_config(
     if unknown:
         raise ValueError(f"unknown provider(s): {', '.join(unknown)}")
 
+    status_by_name = {status["provider"]: status for status in statuses}
+    provider_tables = {
+        provider: {
+            "auth_kind": status_by_name[provider]["auth_kind"],
+            "env_vars": status_by_name[provider]["detected_env_vars"],
+        }
+        for provider in selected
+    }
+
     config_path = config_path.expanduser()
+    if config_path.exists():
+        config = load_config(config_path)
+    else:
+        config = {"schema_version": 1, "secrets": "environment"}
+
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    config_path.write_text(_render_config(statuses, selected), encoding="utf-8")
+    config_path.write_text(
+        _render_loaded_config(
+            config,
+            enabled_providers=list(selected),
+            provider_tables=provider_tables,
+        ),
+        encoding="utf-8",
+    )
 
     return {
         "config_path": str(config_path),
@@ -201,6 +249,105 @@ def write_detected_provider_config(
 
 def load_config(config_path: Path) -> dict[str, object]:
     return tomllib.loads(config_path.expanduser().read_text(encoding="utf-8"))
+
+
+def add_model_profile(config_path: Path, name: str, model: str) -> ModelAddResult:
+    resolved_path = config_path.expanduser()
+    name = _model_profile_name(name)
+    model = _model_string(model)
+
+    if resolved_path.exists():
+        config = load_config(resolved_path)
+        enabled_providers = _enabled_providers(config)
+        provider_tables = _provider_tables(config)
+        model_tables = _model_tables(config)
+    else:
+        config = {"schema_version": 1, "secrets": "environment"}
+        enabled_providers = []
+        provider_tables = {}
+        model_tables = {}
+
+    added = name not in model_tables
+    updated_model_tables = dict(model_tables)
+    updated_model_tables[name] = {"model": model}
+
+    resolved_path.parent.mkdir(parents=True, exist_ok=True)
+    resolved_path.write_text(
+        _render_loaded_config(
+            config,
+            enabled_providers=enabled_providers,
+            provider_tables=provider_tables,
+            model_tables=updated_model_tables,
+        ),
+        encoding="utf-8",
+    )
+
+    return {
+        "config_path": str(resolved_path),
+        "name": name,
+        "model": model,
+        "added": added,
+    }
+
+
+def list_model_profiles(config_path: Path) -> ModelListResult:
+    resolved_path = config_path.expanduser()
+    config = _load_existing_config(resolved_path)
+    model_tables = _model_tables(config)
+    return {
+        "config_path": str(resolved_path),
+        "profiles": [
+            {
+                "name": name,
+                "model": _profile_model(name, model_tables),
+            }
+            for name in model_tables
+        ],
+    }
+
+
+def remove_model_profile(config_path: Path, name: str) -> ModelRemoveResult:
+    resolved_path = config_path.expanduser()
+    name = _model_profile_name(name)
+    config = _load_existing_config(resolved_path)
+    enabled_providers = _enabled_providers(config)
+    provider_tables = _provider_tables(config)
+    model_tables = _model_tables(config)
+
+    removed = name in model_tables
+    updated_model_tables = {
+        profile_name: table
+        for profile_name, table in model_tables.items()
+        if profile_name != name
+    }
+    resolved_path.write_text(
+        _render_loaded_config(
+            config,
+            enabled_providers=enabled_providers,
+            provider_tables=provider_tables,
+            model_tables=updated_model_tables,
+        ),
+        encoding="utf-8",
+    )
+
+    return {
+        "config_path": str(resolved_path),
+        "removed_profile": name,
+        "removed": removed,
+    }
+
+
+def resolve_model_profile(config_path: Path, name: str) -> ModelProfile:
+    resolved_path = config_path.expanduser()
+    name = _model_profile_name(name)
+    config = _load_existing_config(resolved_path)
+    model_tables = _model_tables(config)
+    if name not in model_tables:
+        raise ModelProfileNotFoundError(f"model profile not found: {name}")
+    return {
+        "name": name,
+        "model": _profile_model(name, model_tables),
+    }
 
 
 def list_config_auth(config_path: Path) -> AuthListResult:
@@ -370,6 +517,27 @@ def _provider_spec(provider: str) -> ProviderSpec:
     raise ValueError(f"unknown provider: {provider}")
 
 
+def _model_profile_name(name: str) -> str:
+    name = name.strip()
+    if not name:
+        raise ValueError("model profile name is required")
+    return name
+
+
+def _model_string(model: str) -> str:
+    model = model.strip()
+    if ":" not in model:
+        raise ValueError("model profile requires --model <provider:model>")
+    provider, provider_model = model.split(":", 1)
+    provider = provider.strip().lower()
+    provider_model = provider_model.strip()
+    if not provider or not provider_model:
+        raise ValueError("model profile requires --model <provider:model>")
+    if provider not in {spec.name for spec in PROVIDER_SPECS}:
+        raise ValueError(f"unsupported model provider: {provider}")
+    return f"{provider}:{provider_model}"
+
+
 def _render_config(statuses: list[ProviderStatus], enabled_providers: list[str]) -> str:
     lines = [
         "schema_version = 1",
@@ -432,6 +600,19 @@ def _provider_tables(config: Mapping[str, object]) -> dict[str, dict[str, object
     return tables
 
 
+def _model_tables(config: Mapping[str, object]) -> dict[str, dict[str, object]]:
+    models = config.get("models", {})
+    if not isinstance(models, dict):
+        raise ConfigFormatError("config models must be a table")
+
+    tables: dict[str, dict[str, object]] = {}
+    for name, table in models.items():
+        if not isinstance(name, str) or not isinstance(table, dict):
+            raise ConfigFormatError("config models entries must be tables")
+        tables[name] = table
+    return tables
+
+
 def _auth_kind(provider: str, provider_tables: Mapping[str, Mapping[str, object]]) -> str:
     value = provider_tables.get(provider, {}).get("auth_kind", "")
     if not isinstance(value, str):
@@ -448,12 +629,23 @@ def _env_vars(provider: str, provider_tables: Mapping[str, Mapping[str, object]]
     return value
 
 
+def _profile_model(name: str, model_tables: Mapping[str, Mapping[str, object]]) -> str:
+    value = model_tables.get(name, {}).get("model", "")
+    if not isinstance(value, str):
+        raise ConfigFormatError(f"model profile {name} model must be a string")
+    return _model_string(value)
+
+
 def _render_loaded_config(
     config: Mapping[str, object],
     *,
     enabled_providers: list[str],
     provider_tables: Mapping[str, Mapping[str, object]],
+    model_tables: Mapping[str, Mapping[str, object]] | None = None,
 ) -> str:
+    if model_tables is None:
+        model_tables = _model_tables(config)
+
     lines = [
         f"schema_version = {_schema_version(config)}",
         f"secrets = {_toml_string(_secrets(config))}",
@@ -484,6 +676,15 @@ def _render_loaded_config(
             "]",
             "",
         ])
+
+    for name in model_tables:
+        lines.extend(
+            [
+                f"[models.{_toml_string(name)}]",
+                f"model = {_toml_string(_profile_model(name, model_tables))}",
+                "",
+            ]
+        )
 
     return "\n".join(lines)
 
