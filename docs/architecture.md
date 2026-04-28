@@ -81,6 +81,7 @@ Future auth setup should keep this separation:
 
 - Discovery commands inspect what is already present and print names, not values.
 - Add/init commands may prompt because they are setup commands.
+- A future guided setup command may help the user select an auth method, model profiles, or explicit defaults, but those choices must be visible user-authored configuration.
 - Work commands never prompt and never ask the user to choose credentials mid-run.
 - Validation commands remain explicit opt-in because they can call provider APIs.
 - Config may record enabled provider names, auth kinds, env var names, and non-secret preference metadata.
@@ -93,6 +94,8 @@ Fallback rules are deliberately strict:
 - Never fall back from subscription/OAuth-style auth to API-key billing silently.
 - Never fall back from a direct provider key to an aggregator key silently.
 - If fallback policies are added later, they must be user-authored config, visible in `config auth list`, and validated explicitly.
+
+Explicit defaults, if added later, are different from hidden defaults. A setup flow may offer to write a user-selected default model, profile, or auth preference to config. Work commands may then use that recorded configuration only when the command contract says they can. Think Tank must still never invent a default model, choose a billing path, or retry through a fallback path that the user did not configure.
 
 Unsupported auth paths are out of scope until the provider documents them for third-party tools. Browser-cookie scraping, private subscription-token reuse, or undocumented app-token extraction would violate the no-middleman and no-surprise-billing principles even if technically possible.
 

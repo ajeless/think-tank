@@ -20,6 +20,7 @@ These command shapes are either implemented or reserved as current direction, no
 | Command shape | Intent |
 |---|---|
 | `think setup` | Tool-level onboarding, credentials guidance, and first-run setup. |
+| `think init` | Future guided setup session for selecting auth methods, model profiles, and explicit user-authored defaults. |
 | `think config doctor` | Detect provider credentials from the environment without printing secret values. Implemented. |
 | `think config init` | Write non-secret provider configuration from detected credentials. Implemented. |
 | `think config validate --provider <name> --model <provider:model>` | Explicitly validate real provider access for one selected model. Implemented. |
@@ -38,7 +39,25 @@ These command shapes are either implemented or reserved as current direction, no
 | `think review ...` | Inspect stale, unresolved, or questionable project state. |
 | `think visualize ...` | Generate or refresh rich artifacts such as diagrams or charts. |
 
-## Current Command
+## Command Details
+
+### Future Guided Setup
+
+`think init` is reserved as a possible guided setup command, distinct from `think new`.
+
+Intent: run an interactive CLI setup session that helps the user configure Think Tank deliberately. This may include detecting available auth paths, selecting an auth method for a provider, choosing whether to enable subscription-style auth when officially supported, creating model profiles, and writing explicit user-selected defaults if that feature exists later.
+
+Why it is different from hidden defaults: the user would be making visible choices during a setup command. Persisting those choices is not the same as Think Tank silently choosing a provider, model, auth method, billing path, or fallback at work-command runtime.
+
+Current status: reserved, not implemented.
+
+Rules to preserve:
+
+- `think init` may prompt because setup commands may be interactive.
+- Work commands must remain non-interactive.
+- Any default written by setup must be explicit user-authored config, not an invented product default.
+- Subscription-style auth may be offered only through official supported provider paths.
+- Fallback between auth methods or providers must remain explicit user-authored policy, never automatic recovery.
 
 ### `think new <path> --name <name>`
 
