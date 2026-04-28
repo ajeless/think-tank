@@ -15,6 +15,7 @@ def test_detect_provider_statuses_reports_detected_env_var_names_only() -> None:
         {
             "OPENAI_API_KEY": "sk-secret",
             "OPENROUTER_API_KEY": "or-secret",
+            "GROQ_API_KEY": "gsk-secret",
             "GOOGLE_PROJECT_ID": "project",
             "GOOGLE_REGION": "us-central1",
         }
@@ -29,6 +30,11 @@ def test_detect_provider_statuses_reports_detected_env_var_names_only() -> None:
     assert openrouter["ready"] is True
     assert openrouter["detected_env_vars"] == ["OPENROUTER_API_KEY"]
     assert "or-secret" not in str(openrouter)
+
+    groq = _status(statuses, "groq")
+    assert groq["ready"] is True
+    assert groq["detected_env_vars"] == ["GROQ_API_KEY"]
+    assert "gsk-secret" not in str(groq)
 
     google = _status(statuses, "google")
     assert google["ready"] is False
@@ -51,24 +57,27 @@ def test_write_detected_provider_config_stores_no_secret_values(tmp_path: Path) 
         env={
             "OPENAI_API_KEY": "sk-secret",
             "ANTHROPIC_API_KEY": "anthropic-secret",
+            "GROQ_API_KEY": "gsk-secret",
         },
-        enabled_providers=["openai", "anthropic"],
+        enabled_providers=["openai", "anthropic", "groq"],
     )
 
     assert result == {
         "config_path": str(config_path),
-        "enabled_providers": ["openai", "anthropic"],
+        "enabled_providers": ["openai", "anthropic", "groq"],
     }
     raw_config = config_path.read_text(encoding="utf-8")
     assert "sk-secret" not in raw_config
     assert "anthropic-secret" not in raw_config
+    assert "gsk-secret" not in raw_config
     assert "OPENAI_API_KEY" in raw_config
     assert "ANTHROPIC_API_KEY" in raw_config
+    assert "GROQ_API_KEY" in raw_config
 
     parsed = load_config(config_path)
     assert parsed["schema_version"] == 1
     assert parsed["secrets"] == "environment"
-    assert parsed["enabled_providers"] == ["openai", "anthropic"]
+    assert parsed["enabled_providers"] == ["openai", "anthropic", "groq"]
 
 
 def test_write_detected_provider_config_rejects_unknown_provider(tmp_path: Path) -> None:
