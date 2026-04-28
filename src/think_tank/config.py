@@ -2,37 +2,27 @@
 
 from __future__ import annotations
 
-import os
-import tomllib
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, TypedDict
 
-
-CONFIG_DIR_NAME = "think-tank"
-CONFIG_FILE_NAME = "config.toml"
-
-
-class ProviderStatus(TypedDict):
-    provider: str
-    display_name: str
-    ready: bool
-    auth_kind: str
-    detected_env_vars: list[str]
-    required_env_vars: list[str]
-    missing_env_vars: list[str]
-    notes: list[str]
-
-
-class ProviderAuthMethodOption(TypedDict):
-    provider: str
-    display_name: str
-    auth_kind: str
-    ready: bool
-    detected_env_vars: list[str]
-    required_env_vars: list[str]
-    missing_env_vars: list[str]
-    notes: list[str]
+from .config_store import (
+    ConfigFormatError,
+    ConfigNotFoundError,
+    default_config_path,
+    load_config,
+    toml_string,
+    write_config_text,
+)
+from .provider_registry import (
+    PROVIDER_SPECS,
+    ProviderAuthMethodOption,
+    ProviderAuthMethodSpec,
+    ProviderSpec,
+    ProviderStatus,
+    detect_provider_statuses,
+    provider_auth_method_options,
+    supported_provider_names,
+)
 
 
 class ConfigInitResult(TypedDict):
@@ -138,130 +128,12 @@ class DefaultRemoveResult(TypedDict):
     defaults: DefaultsConfig
 
 
-class ConfigNotFoundError(FileNotFoundError):
-    """Raised when a requested Think Tank config file does not exist."""
-
-
-class ConfigFormatError(ValueError):
-    """Raised when a Think Tank config file has an unsupported shape."""
-
-
 class ProviderAuthNotReadyError(ValueError):
     """Raised when a provider auth path is known but not ready to record."""
 
 
 class ModelProfileNotFoundError(LookupError):
     """Raised when a requested model profile is not configured."""
-
-
-@dataclass(frozen=True)
-class ProviderAuthMethodSpec:
-    auth_kind: str
-    env_vars: tuple[str, ...] = ()
-    required_env_vars: tuple[str, ...] = ()
-    notes: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True)
-class ProviderSpec:
-    name: str
-    display_name: str
-    auth_kind: str
-    env_vars: tuple[str, ...] = ()
-    required_env_vars: tuple[str, ...] = ()
-    notes: tuple[str, ...] = ()
-    auth_methods: tuple[ProviderAuthMethodSpec, ...] = ()
-
-
-PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
-    ProviderSpec(
-        name="openai",
-        display_name="OpenAI",
-        auth_kind="api_key_env",
-        env_vars=("OPENAI_API_KEY",),
-        required_env_vars=("OPENAI_API_KEY",),
-        notes=("Subscription login is not implemented; use an environment API key.",),
-    ),
-    ProviderSpec(
-        name="anthropic",
-        display_name="Anthropic",
-        auth_kind="api_key_env",
-        env_vars=("ANTHROPIC_API_KEY",),
-        required_env_vars=("ANTHROPIC_API_KEY",),
-        notes=("Subscription login is not implemented; use an environment API key.",),
-    ),
-    ProviderSpec(
-        name="google",
-        display_name="Google Vertex AI",
-        auth_kind="vertex_env",
-        env_vars=(
-            "GOOGLE_PROJECT_ID",
-            "GOOGLE_REGION",
-            "GOOGLE_APPLICATION_CREDENTIALS",
-            "GEMINI_API_KEY",
-            "GOOGLE_API_KEY",
-        ),
-        required_env_vars=(
-            "GOOGLE_PROJECT_ID",
-            "GOOGLE_REGION",
-            "GOOGLE_APPLICATION_CREDENTIALS",
-        ),
-        notes=(
-            "The current aisuite Google provider uses Vertex AI credentials.",
-            "GEMINI_API_KEY and GOOGLE_API_KEY are detected but not used by this provider path yet.",
-        ),
-    ),
-    ProviderSpec(
-        name="ollama",
-        display_name="Ollama",
-        auth_kind="local_server",
-        env_vars=("OLLAMA_API_URL",),
-        required_env_vars=(),
-        notes=("No API key is required. OLLAMA_API_URL is optional.",),
-    ),
-    ProviderSpec(
-        name="openrouter",
-        display_name="OpenRouter",
-        auth_kind="api_key_env",
-        env_vars=("OPENROUTER_API_KEY",),
-        required_env_vars=("OPENROUTER_API_KEY",),
-        notes=("OpenRouter is routed through its OpenAI-compatible API.",),
-    ),
-    ProviderSpec(
-        name="groq",
-        display_name="Groq",
-        auth_kind="api_key_env",
-        env_vars=("GROQ_API_KEY",),
-        required_env_vars=("GROQ_API_KEY",),
-        notes=("Groq is routed through its OpenAI-compatible API.",),
-    ),
-)
-
-
-def default_config_path(env: Mapping[str, str] | None = None) -> Path:
-    env = os.environ if env is None else env
-    if xdg_config_home := env.get("XDG_CONFIG_HOME"):
-        return Path(xdg_config_home) / CONFIG_DIR_NAME / CONFIG_FILE_NAME
-    return Path.home() / ".config" / CONFIG_DIR_NAME / CONFIG_FILE_NAME
-
-
-def detect_provider_statuses(env: Mapping[str, str]) -> list[ProviderStatus]:
-    return [_provider_status(spec, env) for spec in PROVIDER_SPECS]
-
-
-def provider_auth_method_options(
-    provider: str,
-    *,
-    env: Mapping[str, str],
-) -> list[ProviderAuthMethodOption]:
-    provider = provider.strip().lower()
-    if not provider:
-        raise ValueError("provider name is required")
-    spec = _provider_spec(provider)
-    return [
-        _provider_auth_method_option(spec, method, env)
-        for method in _provider_auth_method_specs(spec)
-    ]
 
 
 def write_detected_provider_config(
@@ -275,7 +147,7 @@ def write_detected_provider_config(
         status["provider"] for status in statuses if status["ready"]
     ]
     selected = enabled_providers if enabled_providers is not None else ready_provider_names
-    unknown = sorted(set(selected) - {spec.name for spec in PROVIDER_SPECS})
+    unknown = sorted(set(selected) - supported_provider_names())
     if unknown:
         raise ValueError(f"unknown provider(s): {', '.join(unknown)}")
 
@@ -300,25 +172,17 @@ def write_detected_provider_config(
     else:
         config = {"schema_version": 1, "secrets": "environment"}
 
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-    config_path.write_text(
-        _render_loaded_config(
-            config,
-            enabled_providers=list(selected),
-            provider_tables=provider_tables,
-        ),
-        encoding="utf-8",
+    _write_loaded_config(
+        config_path,
+        config,
+        enabled_providers=list(selected),
+        provider_tables=provider_tables,
     )
 
     return {
         "config_path": str(config_path),
         "enabled_providers": list(selected),
     }
-
-
-def load_config(config_path: Path) -> dict[str, object]:
-    return tomllib.loads(config_path.expanduser().read_text(encoding="utf-8"))
-
 
 def add_model_profile(config_path: Path, name: str, model: str) -> ModelAddResult:
     resolved_path = config_path.expanduser()
@@ -340,15 +204,12 @@ def add_model_profile(config_path: Path, name: str, model: str) -> ModelAddResul
     updated_model_tables = dict(model_tables)
     updated_model_tables[name] = {"model": model}
 
-    resolved_path.parent.mkdir(parents=True, exist_ok=True)
-    resolved_path.write_text(
-        _render_loaded_config(
-            config,
-            enabled_providers=enabled_providers,
-            provider_tables=provider_tables,
-            model_tables=updated_model_tables,
-        ),
-        encoding="utf-8",
+    _write_loaded_config(
+        resolved_path,
+        config,
+        enabled_providers=enabled_providers,
+        provider_tables=provider_tables,
+        model_tables=updated_model_tables,
     )
 
     return {
@@ -393,15 +254,13 @@ def remove_model_profile(config_path: Path, name: str) -> ModelRemoveResult:
     updated_defaults = dict(defaults)
     if updated_defaults.get("model_profile") == name:
         del updated_defaults["model_profile"]
-    resolved_path.write_text(
-        _render_loaded_config(
-            config,
-            enabled_providers=enabled_providers,
-            provider_tables=provider_tables,
-            model_tables=updated_model_tables,
-            defaults_table=updated_defaults,
-        ),
-        encoding="utf-8",
+    _write_loaded_config(
+        resolved_path,
+        config,
+        enabled_providers=enabled_providers,
+        provider_tables=provider_tables,
+        model_tables=updated_model_tables,
+        defaults_table=updated_defaults,
     )
 
     return {
@@ -432,15 +291,13 @@ def set_config_defaults(
 
     updated_defaults = dict(defaults)
     updated_defaults["model_profile"] = model_profile
-    resolved_path.write_text(
-        _render_loaded_config(
-            config,
-            enabled_providers=enabled_providers,
-            provider_tables=provider_tables,
-            model_tables=model_tables,
-            defaults_table=updated_defaults,
-        ),
-        encoding="utf-8",
+    _write_loaded_config(
+        resolved_path,
+        config,
+        enabled_providers=enabled_providers,
+        provider_tables=provider_tables,
+        model_tables=model_tables,
+        defaults_table=updated_defaults,
     )
 
     return {
@@ -474,15 +331,13 @@ def remove_config_default(config_path: Path, default_name: str) -> DefaultRemove
         for name, value in defaults.items()
         if name != default_name
     }
-    resolved_path.write_text(
-        _render_loaded_config(
-            config,
-            enabled_providers=enabled_providers,
-            provider_tables=provider_tables,
-            model_tables=model_tables,
-            defaults_table=updated_defaults,
-        ),
-        encoding="utf-8",
+    _write_loaded_config(
+        resolved_path,
+        config,
+        enabled_providers=enabled_providers,
+        provider_tables=provider_tables,
+        model_tables=model_tables,
+        defaults_table=updated_defaults,
     )
 
     return {
@@ -570,14 +425,11 @@ def add_config_auth(
         ],
     }
 
-    resolved_path.parent.mkdir(parents=True, exist_ok=True)
-    resolved_path.write_text(
-        _render_loaded_config(
-            config,
-            enabled_providers=updated_enabled,
-            provider_tables=updated_provider_tables,
-        ),
-        encoding="utf-8",
+    _write_loaded_config(
+        resolved_path,
+        config,
+        enabled_providers=updated_enabled,
+        provider_tables=updated_provider_tables,
     )
 
     return {
@@ -605,13 +457,11 @@ def remove_config_auth(config_path: Path, provider: str) -> AuthRemoveResult:
     updated_provider_tables = {
         name: table for name, table in provider_tables.items() if name != provider
     }
-    resolved_path.write_text(
-        _render_loaded_config(
-            config,
-            enabled_providers=updated_enabled,
-            provider_tables=updated_provider_tables,
-        ),
-        encoding="utf-8",
+    _write_loaded_config(
+        resolved_path,
+        config,
+        enabled_providers=updated_enabled,
+        provider_tables=updated_provider_tables,
     )
 
     return {
@@ -658,54 +508,6 @@ def doctor_config_auth(config_path: Path, *, env: Mapping[str, str]) -> AuthDoct
     }
 
 
-def _provider_status(spec: ProviderSpec, env: Mapping[str, str]) -> ProviderStatus:
-    method = _provider_auth_method_specs(spec)[0]
-    detected = [name for name in method.env_vars if env.get(name)]
-    missing = [name for name in method.required_env_vars if not env.get(name)]
-    return {
-        "provider": spec.name,
-        "display_name": spec.display_name,
-        "ready": not missing,
-        "auth_kind": method.auth_kind,
-        "detected_env_vars": detected,
-        "required_env_vars": list(method.required_env_vars),
-        "missing_env_vars": missing,
-        "notes": list(method.notes),
-    }
-
-
-def _provider_auth_method_option(
-    spec: ProviderSpec,
-    method: ProviderAuthMethodSpec,
-    env: Mapping[str, str],
-) -> ProviderAuthMethodOption:
-    detected = [name for name in method.env_vars if env.get(name)]
-    missing = [name for name in method.required_env_vars if not env.get(name)]
-    return {
-        "provider": spec.name,
-        "display_name": spec.display_name,
-        "auth_kind": method.auth_kind,
-        "ready": not missing,
-        "detected_env_vars": detected,
-        "required_env_vars": list(method.required_env_vars),
-        "missing_env_vars": missing,
-        "notes": list(method.notes),
-    }
-
-
-def _provider_auth_method_specs(spec: ProviderSpec) -> tuple[ProviderAuthMethodSpec, ...]:
-    if spec.auth_methods:
-        return spec.auth_methods
-    return (
-        ProviderAuthMethodSpec(
-            auth_kind=spec.auth_kind,
-            env_vars=spec.env_vars,
-            required_env_vars=spec.required_env_vars,
-            notes=spec.notes,
-        ),
-    )
-
-
 def _selected_auth_method_option(
     provider: str,
     *,
@@ -728,14 +530,6 @@ def _selected_auth_method_option(
         f"unsupported auth kind for {provider}: {auth_kind} (supported: {supported})"
     )
 
-
-def _provider_spec(provider: str) -> ProviderSpec:
-    for spec in PROVIDER_SPECS:
-        if spec.name == provider:
-            return spec
-    raise ValueError(f"unknown provider: {provider}")
-
-
 def _model_profile_name(name: str) -> str:
     name = name.strip()
     if not name:
@@ -752,7 +546,7 @@ def _model_string(model: str) -> str:
     provider_model = provider_model.strip()
     if not provider or not provider_model:
         raise ValueError("model profile requires --model <provider:model>")
-    if provider not in {spec.name for spec in PROVIDER_SPECS}:
+    if provider not in supported_provider_names():
         raise ValueError(f"unsupported model provider: {provider}")
     return f"{provider}:{provider_model}"
 
@@ -761,6 +555,27 @@ def _load_existing_config(config_path: Path) -> dict[str, object]:
     if not config_path.exists():
         raise ConfigNotFoundError(f"config not found: {config_path}")
     return load_config(config_path)
+
+
+def _write_loaded_config(
+    config_path: Path,
+    config: Mapping[str, object],
+    *,
+    enabled_providers: list[str],
+    provider_tables: Mapping[str, Mapping[str, object]],
+    model_tables: Mapping[str, Mapping[str, object]] | None = None,
+    defaults_table: Mapping[str, str] | None = None,
+) -> None:
+    write_config_text(
+        config_path,
+        _render_loaded_config(
+            config,
+            enabled_providers=enabled_providers,
+            provider_tables=provider_tables,
+            model_tables=model_tables,
+            defaults_table=defaults_table,
+        ),
+    )
 
 
 def _enabled_providers(config: Mapping[str, object]) -> list[str]:
@@ -993,7 +808,7 @@ def _secrets(config: Mapping[str, object]) -> str:
 
 
 def _toml_string(value: str) -> str:
-    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    return toml_string(value)
 
 
 def _doctor_provider_names(

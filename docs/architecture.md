@@ -65,6 +65,10 @@ Validation must use the same no-middleman rules as model calls:
 
 Ollama is local-provider validation rather than credential validation. The validator checks local server availability using `OLLAMA_API_URL` or the default `http://localhost:11434`, then verifies that the requested model appears in the local model registry.
 
+Provider metadata is owned by the provider registry layer, not by CLI command code or config file mutation code. Engine behavior and config behavior may both depend on the packaged provider registry, but the registry should stay focused on supported provider names, auth method metadata, and environment-based readiness detection.
+
+User config file concerns are separate from provider metadata. Config storage helpers own default config path resolution, TOML loading errors, text writing, and TOML string escaping. Higher-level config behavior owns the meaning of auth records, model profiles, and explicit defaults.
+
 ### Auth Model Direction
 
 Provider auth is explicit configuration, not an implicit rescue path. Think Tank may help a user discover, enable, disable, or validate auth methods, but it must not invent a billing path or silently escalate from one user-supplied auth method to another.
