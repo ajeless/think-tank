@@ -47,6 +47,15 @@ class AuthRemoveResult(TypedDict):
     enabled_providers: list[str]
 
 
+class AuthAddResult(TypedDict):
+    config_path: str
+    provider: str
+    added: bool
+    auth_kind: str
+    env_vars: list[str]
+    enabled_providers: list[str]
+
+
 class AuthDoctorProvider(TypedDict):
     provider: str
     display_name: str
@@ -73,6 +82,10 @@ class ConfigNotFoundError(FileNotFoundError):
 
 class ConfigFormatError(ValueError):
     """Raised when a Think Tank config file has an unsupported shape."""
+
+
+class ProviderAuthNotReadyError(ValueError):
+    """Raised when a provider auth path is known but not ready to record."""
 
 
 @dataclass(frozen=True)
@@ -208,6 +221,65 @@ def list_config_auth(config_path: Path) -> AuthListResult:
     }
 
 
+def add_config_auth(
+    config_path: Path,
+    provider: str,
+    *,
+    env: Mapping[str, str],
+) -> AuthAddResult:
+    resolved_path = config_path.expanduser()
+    provider = provider.strip().lower()
+    if not provider:
+        raise ValueError("auth add requires a provider name")
+
+    spec = _provider_spec(provider)
+    status = _provider_status(spec, env)
+    if status["missing_env_vars"]:
+        raise ProviderAuthNotReadyError(
+            "missing required environment variable(s): "
+            + ", ".join(status["missing_env_vars"])
+        )
+
+    if resolved_path.exists():
+        config = load_config(resolved_path)
+        enabled_providers = _enabled_providers(config)
+        provider_tables = _provider_tables(config)
+    else:
+        config = {"schema_version": 1, "secrets": "environment"}
+        enabled_providers = []
+        provider_tables = {}
+
+    added = provider not in enabled_providers or provider not in provider_tables
+    updated_enabled = list(enabled_providers)
+    if provider not in updated_enabled:
+        updated_enabled.append(provider)
+
+    updated_provider_tables = dict(provider_tables)
+    updated_provider_tables[provider] = {
+        "auth_kind": status["auth_kind"],
+        "env_vars": status["detected_env_vars"],
+    }
+
+    resolved_path.parent.mkdir(parents=True, exist_ok=True)
+    resolved_path.write_text(
+        _render_loaded_config(
+            config,
+            enabled_providers=updated_enabled,
+            provider_tables=updated_provider_tables,
+        ),
+        encoding="utf-8",
+    )
+
+    return {
+        "config_path": str(resolved_path),
+        "provider": provider,
+        "added": added,
+        "auth_kind": status["auth_kind"],
+        "env_vars": status["detected_env_vars"],
+        "enabled_providers": updated_enabled,
+    }
+
+
 def remove_config_auth(config_path: Path, provider: str) -> AuthRemoveResult:
     resolved_path = config_path.expanduser()
     provider = provider.strip().lower()
@@ -289,6 +361,13 @@ def _provider_status(spec: ProviderSpec, env: Mapping[str, str]) -> ProviderStat
         "missing_env_vars": missing,
         "notes": list(spec.notes),
     }
+
+
+def _provider_spec(provider: str) -> ProviderSpec:
+    for spec in PROVIDER_SPECS:
+        if spec.name == provider:
+            return spec
+    raise ValueError(f"unknown provider: {provider}")
 
 
 def _render_config(statuses: list[ProviderStatus], enabled_providers: list[str]) -> str:

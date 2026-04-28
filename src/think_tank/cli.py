@@ -14,6 +14,8 @@ from rich.console import Console
 from .config import (
     ConfigFormatError,
     ConfigNotFoundError,
+    ProviderAuthNotReadyError,
+    add_config_auth,
     default_config_path,
     detect_provider_statuses,
     doctor_config_auth,
@@ -209,6 +211,46 @@ def config_validate(
     console.print(result["message"])
     if not result["ok"]:
         raise typer.Exit(1)
+
+
+@config_auth_app.command("add")
+def config_auth_add(
+    provider: Annotated[
+        str,
+        typer.Argument(help="Provider auth metadata to add to Think Tank config."),
+    ],
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", help="Path to update non-secret Think Tank config."),
+    ] = None,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", help="Add ready provider auth metadata without prompting."),
+    ] = False,
+) -> None:
+    """Add provider auth metadata to Think Tank config without storing secrets."""
+
+    config_path = config or default_config_path(os.environ)
+    if not yes:
+        confirmed = questionary.confirm(
+            f"Add non-secret auth metadata for {provider} to {config_path}?",
+            default=False,
+        ).ask()
+        if not confirmed:
+            raise typer.Abort()
+
+    try:
+        result = add_config_auth(config_path, provider, env=os.environ)
+    except (ProviderAuthNotReadyError, ConfigFormatError, ValueError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    action = "Added" if result["added"] else "Updated"
+    console.print(
+        f"{action} auth metadata for {result['provider']} in {result['config_path']}."
+    )
+    console.print(f"Auth kind: {result['auth_kind']}")
+    console.print(f"Env vars: {', '.join(result['env_vars']) or '-'}")
+    console.print("Secret values were not stored.")
 
 
 @config_auth_app.command("doctor")

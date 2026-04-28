@@ -4,6 +4,8 @@ import pytest
 
 from think_tank.config import (
     ConfigNotFoundError,
+    ProviderAuthNotReadyError,
+    add_config_auth,
     default_config_path,
     detect_provider_statuses,
     doctor_config_auth,
@@ -128,6 +130,76 @@ def test_list_config_auth_returns_enabled_provider_metadata(tmp_path: Path) -> N
 def test_list_config_auth_requires_existing_config(tmp_path: Path) -> None:
     with pytest.raises(ConfigNotFoundError, match="config not found"):
         list_config_auth(tmp_path / "missing.toml")
+
+
+def test_add_config_auth_creates_config_for_ready_env_provider(tmp_path: Path) -> None:
+    config_path = tmp_path / "nested" / "config.toml"
+
+    result = add_config_auth(
+        config_path,
+        "openai",
+        env={"OPENAI_API_KEY": "sk-secret"},
+    )
+
+    assert result == {
+        "config_path": str(config_path),
+        "provider": "openai",
+        "added": True,
+        "auth_kind": "api_key_env",
+        "env_vars": ["OPENAI_API_KEY"],
+        "enabled_providers": ["openai"],
+    }
+    raw_config = config_path.read_text(encoding="utf-8")
+    assert "sk-secret" not in raw_config
+    assert "OPENAI_API_KEY" in raw_config
+    parsed = load_config(config_path)
+    assert parsed["enabled_providers"] == ["openai"]
+    assert parsed["providers"]["openai"]["auth_kind"] == "api_key_env"
+
+
+def test_add_config_auth_adds_ollama_without_secret(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+
+    result = add_config_auth(config_path, "ollama", env={})
+
+    assert result["provider"] == "ollama"
+    assert result["auth_kind"] == "local_server"
+    assert result["env_vars"] == []
+    parsed = load_config(config_path)
+    assert parsed["enabled_providers"] == ["ollama"]
+    assert parsed["providers"]["ollama"]["env_vars"] == []
+
+
+def test_add_config_auth_updates_existing_provider_metadata(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    write_detected_provider_config(
+        config_path,
+        env={"OPENAI_API_KEY": "old-secret"},
+        enabled_providers=["openai"],
+    )
+
+    result = add_config_auth(
+        config_path,
+        "openai",
+        env={"OPENAI_API_KEY": "new-secret"},
+    )
+
+    assert result["added"] is False
+    assert result["enabled_providers"] == ["openai"]
+    assert load_config(config_path)["enabled_providers"] == ["openai"]
+    raw_config = config_path.read_text(encoding="utf-8")
+    assert "old-secret" not in raw_config
+    assert "new-secret" not in raw_config
+
+
+def test_add_config_auth_rejects_missing_required_env(tmp_path: Path) -> None:
+    with pytest.raises(ProviderAuthNotReadyError, match="OPENAI_API_KEY"):
+        add_config_auth(tmp_path / "config.toml", "openai", env={})
+
+
+def test_add_config_auth_rejects_unknown_provider(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="unknown provider: futureai"):
+        add_config_auth(tmp_path / "config.toml", "futureai", env={})
 
 
 def test_doctor_config_auth_reports_detection_without_config(tmp_path: Path) -> None:

@@ -323,6 +323,66 @@ def test_cli_config_auth_list_reports_missing_config() -> None:
     assert "Traceback" not in result.output
 
 
+def test_cli_config_auth_add_yes_creates_config_without_secret_values() -> None:
+    with runner.isolated_filesystem():
+        result = runner.invoke(
+            app,
+            ["config", "auth", "add", "groq", "--yes", "--config", "config.toml"],
+            env={"GROQ_API_KEY": "gsk-secret"},
+        )
+        config_text = Path("config.toml").read_text(encoding="utf-8")
+
+    assert result.exit_code == 0
+    assert "Added auth metadata for groq" in result.output
+    assert "Auth kind: api_key_env" in result.output
+    assert "Env vars: GROQ_API_KEY" in result.output
+    assert "Secret values were not stored." in result.output
+    assert "gsk-secret" not in result.output
+    assert "gsk-secret" not in config_text
+    assert "GROQ_API_KEY" in config_text
+
+
+def test_cli_config_auth_add_yes_reports_missing_env_without_traceback() -> None:
+    with runner.isolated_filesystem():
+        result = runner.invoke(
+            app,
+            ["config", "auth", "add", "openai", "--yes", "--config", "config.toml"],
+            env={"OPENAI_API_KEY": ""},
+        )
+        config_exists = Path("config.toml").exists()
+
+    assert result.exit_code != 0
+    assert "missing required environment variable(s): OPENAI_API_KEY" in result.output
+    assert "Traceback" not in result.output
+    assert not config_exists
+
+
+def test_cli_config_auth_add_yes_adds_ollama_without_secret_values() -> None:
+    with runner.isolated_filesystem():
+        result = runner.invoke(
+            app,
+            ["config", "auth", "add", "ollama", "--yes", "--config", "config.toml"],
+        )
+        payload = json.loads(
+            runner.invoke(
+                app,
+                ["config", "auth", "list", "--config", "config.toml", "--json"],
+            ).output
+        )
+
+    assert result.exit_code == 0
+    assert "Added auth metadata for ollama" in result.output
+    assert "Auth kind: local_server" in result.output
+    assert "Env vars: -" in result.output
+    assert payload["providers"] == [
+        {
+            "provider": "ollama",
+            "auth_kind": "local_server",
+            "env_vars": [],
+        }
+    ]
+
+
 def test_cli_config_auth_remove_updates_config_without_touching_secrets() -> None:
     with runner.isolated_filesystem():
         runner.invoke(
