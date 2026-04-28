@@ -31,6 +31,9 @@ These command shapes are either implemented or reserved as current direction, no
 | `think config model add <name> --model <provider:model>` | Store a named non-secret model profile. Implemented. |
 | `think config model list` | List named model profiles. Implemented. |
 | `think config model remove <name>` | Remove a named model profile. Implemented. |
+| `think config defaults set --model-profile <name>` | Record an explicit user-authored default model profile. Implemented. |
+| `think config defaults list` | List explicit user-authored defaults. Implemented. |
+| `think config defaults remove model-profile` | Remove the default model profile. Implemented. |
 | `think new <path> --name <name>` | Create a local idea project/workspace. Implemented. |
 | `think ask "<prompt>" --project <path> --model <provider:model>` | Run a single non-interactive model interaction and record its transcript. Implemented. |
 | `think ask "<prompt>" --project <path> --model-profile <name>` | Run a single non-interactive model interaction using a named model profile. Implemented. |
@@ -182,6 +185,26 @@ Current behavior:
 - Stores profile names and explicit `provider:model` strings only.
 - Requires model strings to use a packaged provider prefix.
 - Does not validate provider credentials, call provider APIs, store provider secrets, choose a default model, or create fallback policies.
+
+### `think config defaults ...`
+
+Intent: manage explicit user-authored preferences that setup flows can write without turning them into hidden product defaults.
+
+Why it exists: guided setup needs a durable place to record choices the user intentionally made, such as a preferred model profile. Recording those choices is different from Think Tank inventing a provider, model, auth method, billing path, or fallback.
+
+Current status: implemented for model profile defaults. `defaults set`, `defaults list`, and `defaults remove` are implemented.
+
+Current behavior:
+
+- `think config defaults set --model-profile <name>` records a default model profile.
+- The named model profile must already exist in the same config file.
+- `think config defaults list` prints configured defaults and supports `--json`.
+- `think config defaults remove model-profile` removes the default model profile and is idempotent when absent.
+- Removing a model profile also clears the default if that default pointed at the removed profile.
+- Reads and rewrites `~/.config/think-tank/config.toml` by default, or `--config <path>`.
+- Stores default profile names only, not raw model strings or provider secrets.
+- Does not make `think ask` or any other work command use defaults automatically yet.
+- Does not create fallback policies.
 
 ### `think config validate --provider <name> --model <provider:model>`
 
