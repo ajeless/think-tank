@@ -59,6 +59,60 @@ Validation must use the same no-middleman rules as model calls:
 
 Ollama is local-provider validation rather than credential validation. The validator checks local server availability using `OLLAMA_API_URL` or the default `http://localhost:11434`, then verifies that the requested model appears in the local model registry.
 
+### Auth Model Direction
+
+Provider auth is explicit configuration, not an implicit rescue path. Think Tank may help a user discover, enable, disable, or validate auth methods, but it must not invent a billing path or silently escalate from one user-supplied auth method to another.
+
+Auth method names should describe the mechanism, not the provider:
+
+| Auth kind | Meaning | Secret storage rule |
+|---|---|---|
+| `api_key_env` | Provider API key read from a named environment variable. | Store env var names only. |
+| `local_server` | Local service endpoint, such as Ollama. | Store optional endpoint env var names only. |
+| `service_account_env` | Provider service account or application credentials discovered from environment variables. | Store env var names and non-secret metadata only. |
+| `official_oauth` | Official OAuth/device flow intended for third-party API clients. | Store no bearer/refresh tokens until a secure storage decision is made. |
+| `subscription_official` | Official provider-supported subscription auth for third-party tools, if one exists. | Store no subscription tokens in Think Tank config or project state. |
+
+Future auth setup should keep this separation:
+
+- Discovery commands inspect what is already present and print names, not values.
+- Add/init commands may prompt because they are setup commands.
+- Work commands never prompt and never ask the user to choose credentials mid-run.
+- Validation commands remain explicit opt-in because they can call provider APIs.
+- Config may record enabled provider names, auth kinds, env var names, and non-secret preference metadata.
+- Config must not record API keys, bearer tokens, refresh tokens, subscription tokens, cookies, or provider session dumps.
+
+Fallback rules are deliberately strict:
+
+- If the configured auth method fails, report that failure.
+- If another auth method is also configured, do not switch to it unless the user explicitly selected a fallback policy.
+- Never fall back from subscription/OAuth-style auth to API-key billing silently.
+- Never fall back from a direct provider key to an aggregator key silently.
+- If fallback policies are added later, they must be user-authored config, visible in `config auth list`, and validated explicitly.
+
+Unsupported auth paths are out of scope until the provider documents them for third-party tools. Browser-cookie scraping, private subscription-token reuse, or undocumented app-token extraction would violate the no-middleman and no-surprise-billing principles even if technically possible.
+
+### Provider Auth Matrix
+
+This matrix captures current direction, not complete implementation.
+
+| Provider | Current/future auth kinds | Notes |
+|---|---|---|
+| OpenAI | `api_key_env`; future official OAuth only if documented for API clients. | ChatGPT subscription access is separate from API billing unless OpenAI exposes an official third-party path. |
+| Anthropic | `api_key_env`; future official OAuth/subscription only if documented for third-party tools. | Claude subscription-token reuse is not an implemented path. |
+| Google / Gemini | `service_account_env`; future `api_key_env` for Gemini API path; possible official OAuth if needed. | Current Google path uses Vertex-style environment credentials. |
+| Ollama | `local_server`. | No provider subscription or remote billing path. |
+| OpenRouter | `api_key_env`. | Aggregator account credits; do not silently fall back to or from direct provider keys. |
+| Groq | `api_key_env`. | OpenAI-compatible API route with Groq account key. |
+| Mistral | Future `api_key_env`. | Candidate provider. |
+| xAI | Future `api_key_env`. | Candidate provider. |
+| DeepSeek | Future `api_key_env`. | Candidate provider. |
+| Cohere | Future `api_key_env`. | Candidate provider. |
+| Perplexity | Future `api_key_env`. | Consumer Pro subscription should not be assumed to grant API access. |
+| Together AI | Future `api_key_env`. | Candidate aggregator/provider. |
+| Fireworks | Future `api_key_env`. | Candidate aggregator/provider. |
+| Cerebras | Future `api_key_env`. | Candidate provider. |
+
 ## Local-First Project State
 
 A Think Tank project is a local directory containing durable state and artifacts. Today that state begins as JSON plus directories for transcripts, notes, and artifacts. Git remains the versioning layer.
