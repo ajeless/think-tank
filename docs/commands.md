@@ -20,7 +20,8 @@ These command shapes are either implemented or reserved as current direction, no
 | Command shape | Intent |
 |---|---|
 | `think setup` | Tool-level onboarding, credentials guidance, and first-run setup. |
-| `think config ...` | Tool-level preferences, not project work. |
+| `think config doctor` | Detect provider credentials from the environment without printing secret values. Implemented. |
+| `think config init` | Write non-secret provider configuration from detected credentials. Implemented. |
 | `think new <path> --name <name>` | Create a local idea project/workspace. Implemented. |
 | `think ask "<prompt>" --project <path> --model <provider:model>` | Run a single non-interactive model interaction and record its transcript. Implemented. |
 | `think elaborate ...` | Capture a definition, example, clarification, or related note. |
@@ -39,6 +40,38 @@ Why it exists: before agents can do useful work, Think Tank needs a durable loca
 Current status: implemented.
 
 Why this name: `think new` avoids making `project` a top-level namespace before the domain model has earned it, and it avoids `init`, which sounds like tool or current-directory setup.
+
+### `think config doctor`
+
+Intent: show which supported provider credential paths are visible to Think Tank without exposing secret values.
+
+Why it exists: provider onboarding needs a fast, safe diagnostic before real model calls. Users should know whether the process can see their credentials before a work command fails at provider runtime.
+
+Current status: implemented.
+
+Current behavior:
+
+- Detects provider environment variable names for OpenAI, Anthropic, Google Vertex AI, Ollama, and OpenRouter.
+- Reports missing required environment variable names.
+- Prints env var names only, never env var values.
+- Supports `--json` for machine-readable output.
+- Does not make provider API calls.
+
+### `think config init`
+
+Intent: write non-secret user-level provider configuration from detected credentials.
+
+Why it exists: setup commands may be guided and interactive, while work commands must remain scriptable and non-interactive.
+
+Current status: implemented.
+
+Current behavior:
+
+- Detects currently ready providers.
+- Prompts the user to enable detected providers, unless `--yes` is passed.
+- Writes `~/.config/think-tank/config.toml` by default, or `--config <path>`.
+- Stores provider names, auth kinds, and detected env var names.
+- Does not store API keys, bearer tokens, subscription tokens, or default models.
 
 ### `think ask "<prompt>" --project <path> --model <provider:model>`
 

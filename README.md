@@ -30,6 +30,18 @@ uv run think new ./my-idea --name "My Idea"
 uv run think ask "What should we evaluate first?" --project ./my-idea --model openai:gpt-4o
 ```
 
+Check which provider credentials Think Tank can see:
+
+```bash
+think config doctor
+```
+
+Write non-secret provider configuration from detected credentials:
+
+```bash
+think config init
+```
+
 The command creates:
 
 ```text
@@ -57,3 +69,5 @@ Packaged model-provider support currently includes:
 - Google: `google:<model>` with Google/Vertex credentials supported by aisuite.
 - Ollama: `ollama:<model>` with a local Ollama server, defaulting to `http://localhost:11434`.
 - OpenRouter: `openrouter:<model>` with `OPENROUTER_API_KEY`, routed through OpenRouter's OpenAI-compatible API.
+
+Think Tank does not store provider secrets. Provider credentials are read from environment variables, and config files store only non-secret metadata such as enabled provider names and detected env var names. Provider subscription sign-in is not implemented unless a provider exposes a supported auth path for third-party tools; Think Tank will not silently switch from subscription auth to API billing.

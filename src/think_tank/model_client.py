@@ -31,6 +31,14 @@ class ModelClientConfigurationError(RuntimeError):
     """Raised when a selected model provider is not configured for real calls."""
 
 
+class ModelClientCallError(RuntimeError):
+    """Raised when a selected model provider rejects or fails a real call."""
+
+    def __init__(self, provider: str, message: str) -> None:
+        self.provider = provider
+        super().__init__(f"Model call failed for {provider}: {message}")
+
+
 class AisuiteModelClient:
     """aisuite-backed implementation of the model client boundary."""
 
@@ -49,6 +57,9 @@ class AisuiteModelClient:
             raise ModelClientConfigurationError(
                 f"Model provider dependency missing for {provider}."
             ) from exc
+        except Exception as exc:
+            provider = model.split(":", 1)[0]
+            raise ModelClientCallError(provider, str(exc)) from exc
         return ModelResponse(content=response.choices[0].message.content)
 
     def _client_and_model(self, model: str) -> tuple[Any, str]:
