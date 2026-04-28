@@ -10,6 +10,7 @@ These notes document the intent behind commands as they are introduced. The comm
 - Commands should express user intent before internal implementation.
 - Work commands must be non-interactive: required input arrives through arguments and flags.
 - Work commands that call models must get provider/model choice from explicit command input, user config, or user/project-supplied agent configuration. They must fail clearly if no model is supplied.
+- Future project config should override user config, but command arguments and flags remain the most explicit source of command input.
 - Setup commands may use interactive prompts because the user explicitly asked to configure or initialize something.
 - The CLI is an adapter over engine behavior, not the owner of product logic.
 
@@ -62,8 +63,8 @@ Current behavior:
 - Writes `~/.config/think-tank/config.toml` by default, or `--config <path>`.
 - Stores provider names, auth kinds, env var names, and auth method records only.
 - Does not store API keys, bearer tokens, refresh tokens, subscription tokens, browser cookies, provider session dumps, or provider secret values.
-- May optionally create one named model profile from a user-entered `provider:model` string.
-- May optionally set that newly created profile as an explicit default model profile.
+- May prompt for a named model profile from a user-entered `provider:model` string.
+- May set that profile as an explicit default model profile.
 - Does not validate provider credentials, call provider APIs, or hit the network.
 - Does not make `think ask` or any other work command use defaults automatically.
 

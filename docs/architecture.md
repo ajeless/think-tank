@@ -49,7 +49,7 @@ Config files may also record named model profiles as explicit `provider:model` s
 
 Config files may record explicit user-authored defaults under `[defaults]`. Defaults are setup-owned preferences, not product-invented choices. Work commands may use a recorded default only when their command contract explicitly says they do. Until then, commands such as `think ask` must keep requiring explicit command input or an explicit model profile flag.
 
-Setup commands may guide users through provider detection and configuration. Top-level `think init` is the first guided setup flow: it detects ready auth paths, lets the user select the paths to record, writes non-secret auth metadata, and may create one named model profile plus one explicit default. Work commands must stay non-interactive and must not prompt for credentials mid-run.
+Setup commands may guide users through provider detection and configuration. Top-level `think init` is the first guided setup flow: it detects ready auth paths, lets the user select the paths to record, writes non-secret auth metadata, and may record model profiles and explicit defaults. Work commands must stay non-interactive and must not prompt for credentials mid-run.
 
 Subscription account sign-in is provider-specific and only acceptable through an official supported auth path. The tool must not implement unsupported subscription-token workarounds, and it must not silently fall back from subscription auth to API billing. Any validation that could spend money or hit external provider rate limits must be opt-in.
 
@@ -70,6 +70,19 @@ Ollama is local-provider validation rather than credential validation. The valid
 Provider metadata is owned by the provider registry layer, not by CLI command code or config file mutation code. Engine behavior and config behavior may both depend on the packaged provider registry, but the registry should stay focused on supported provider names, auth method metadata, and environment-based readiness detection. Packaged provider specs use explicit auth method records as their only auth shape.
 
 User config file concerns are separate from provider metadata. Config storage helpers own default config path resolution, TOML loading errors, text writing, and TOML string escaping. Shared config helpers own TOML table validation and rendering. Higher-level config behavior is split by product concern: auth records, model profiles, and explicit defaults each have their own module. `think_tank.config` remains a compatibility facade for CLI and external imports; it should not regain behavior ownership.
+
+### Config Layering Direction
+
+Think Tank currently writes user-level config to `~/.config/think-tank/config.toml` by default, or to an explicit `--config <path>`. This is enough for early setup, but project-specific model choices will likely need their own layer once projects have more durable agent and workflow preferences.
+
+The likely long-term shape is:
+
+- User config stores machine-local preferences: provider auth metadata, global model profiles, and global explicit defaults.
+- Project config stores project-local preferences: project model profiles, project defaults, and future agent or workflow selections.
+- Command inputs win over project config, and project config wins over user config.
+- If no command input or configured value supplies a required model, work commands still fail clearly instead of inventing a provider, model, auth method, or fallback.
+
+Provider auth metadata should remain primarily user-level because credentials are user-machine state, not project state. Project config may reference profile names or explicit `provider:model` strings, but it must not store provider secrets. Both config layers follow the same no-secret rule: API keys, bearer tokens, refresh tokens, subscription tokens, browser cookies, and provider session dumps stay out of Think Tank config and project state.
 
 ### Auth Model Direction
 
