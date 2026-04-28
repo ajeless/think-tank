@@ -37,9 +37,9 @@ If no model is supplied through one of those sources, the engine must fail with 
 
 Named model profiles are explicit user configuration, not defaults. A profile may shorten a command like `think ask ... --model-profile fast`, but Think Tank still must not select that profile automatically or fall back to another profile if the selected one fails.
 
-The current aisuite-backed client is intentionally thin. Unit tests should use a fake model client so test runs do not hit provider APIs or depend on network access.
+The current model client is intentionally thin. Most providers go through aisuite; Gemini Developer API uses Google's official `google-genai` SDK because the API-key path is distinct from the Vertex-style Google provider. Unit tests should use a fake model client or fake SDK boundary so test runs do not hit provider APIs or depend on network access.
 
-The packaged provider set is intentionally limited to the providers in active early use: OpenAI, Anthropic, Google, Ollama, OpenRouter, and Groq. OpenAI, Anthropic, Google, and Ollama use aisuite provider support directly. OpenRouter and Groq are routed through their OpenAI-compatible APIs because the installed aisuite version does not expose first-class providers for those routes.
+The packaged provider set is intentionally limited to the providers in active early use: OpenAI, Anthropic, Gemini, Google Vertex AI, Ollama, OpenRouter, and Groq. OpenAI, Anthropic, Google Vertex AI, and Ollama use aisuite provider support directly. Gemini uses the Gemini Developer API key path through `google-genai`. OpenRouter and Groq are routed through their OpenAI-compatible APIs because the installed aisuite version does not expose first-class providers for those routes.
 
 ## Provider Onboarding And Secrets
 
@@ -161,7 +161,8 @@ This matrix captures current direction, not complete implementation.
 |---|---|---|
 | OpenAI | `api_key_env`. | ChatGPT/Codex subscription access is deferred and must not be treated as API auth. |
 | Anthropic | `api_key_env`. | Claude/Claude Code subscription access is deferred and must not be treated as API auth. |
-| Google / Gemini | `service_account_env`; future `api_key_env` for Gemini API path. | Current Google path uses Vertex-style environment credentials. OAuth/device flows are deferred. |
+| Gemini | `api_key_env`. | Uses the Gemini Developer API with `GOOGLE_API_KEY` or `GEMINI_API_KEY`; no Vertex project or service-account credentials are required for this path. |
+| Google Vertex AI | `service_account_env`. | The `google:<model>` path uses Vertex-style environment credentials. OAuth/device flows are deferred. |
 | Ollama | `local_server`. | No provider subscription or remote billing path. |
 | OpenRouter | `api_key_env`. | Aggregator account credits; do not silently fall back to or from direct provider keys. |
 | Groq | `api_key_env`. | OpenAI-compatible API route with Groq account key. |

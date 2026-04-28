@@ -28,6 +28,26 @@ def test_cli_config_doctor_reports_env_names_without_secret_values() -> None:
     assert "anthropic-secret" not in result.output
 
 
+def test_cli_config_doctor_does_not_warn_about_unconfigured_vertex_for_gemini() -> None:
+    result = runner.invoke(
+        app,
+        ["config", "doctor"],
+        env={
+            "GEMINI_API_KEY": "gemini-secret",
+            "GOOGLE_PROJECT_ID": "",
+            "GOOGLE_REGION": "",
+            "GOOGLE_APPLICATION_CREDENTIALS": "",
+        },
+    )
+
+    assert result.exit_code == 0
+    assert "Gemini API: ready=yes" in result.output
+    assert "GEMINI_API_KEY" in result.output
+    assert "Google Vertex AI" not in result.output
+    assert "GOOGLE_PROJECT_ID" not in result.output
+    assert "gemini-secret" not in result.output
+
+
 def test_cli_config_doctor_json_reports_ready_status_without_secret_values() -> None:
     result = runner.invoke(
         app,
@@ -81,6 +101,29 @@ def test_cli_config_validate_reports_success_without_secret_values(monkeypatch) 
     assert "Model: openai:gpt-4o" in result.output
     assert "Status: success" in result.output
     assert "sk-secret" not in result.output
+
+
+def test_cli_config_validate_supports_gemini_api_key(monkeypatch) -> None:
+    monkeypatch.setattr("think_tank.cli_config.AisuiteModelClient", FakeAisuiteModelClient)
+
+    result = runner.invoke(
+        app,
+        [
+            "config",
+            "validate",
+            "--provider",
+            "gemini",
+            "--model",
+            "gemini:gemini-3.1-pro-preview",
+        ],
+        env={"GEMINI_API_KEY": "gemini-secret"},
+    )
+
+    assert result.exit_code == 0
+    assert "Provider: gemini" in result.output
+    assert "Model: gemini:gemini-3.1-pro-preview" in result.output
+    assert "Status: success" in result.output
+    assert "gemini-secret" not in result.output
 
 
 def test_cli_config_validate_reports_missing_credentials_without_traceback() -> None:

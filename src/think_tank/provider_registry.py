@@ -41,6 +41,7 @@ class ProviderAuthMethodSpec:
     auth_kind: str
     env_vars: tuple[str, ...] = ()
     required_env_vars: tuple[str, ...] = ()
+    required_any_env_vars: tuple[str, ...] = ()
     implemented: bool = True
     official: bool = True
     notes: tuple[str, ...] = ()
@@ -98,8 +99,6 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
                     "GOOGLE_PROJECT_ID",
                     "GOOGLE_REGION",
                     "GOOGLE_APPLICATION_CREDENTIALS",
-                    "GEMINI_API_KEY",
-                    "GOOGLE_API_KEY",
                 ),
                 required_env_vars=(
                     "GOOGLE_PROJECT_ID",
@@ -108,7 +107,20 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
                 ),
                 notes=(
                     "The current aisuite Google provider uses Vertex AI credentials.",
-                    "GEMINI_API_KEY and GOOGLE_API_KEY are detected but not used by this provider path yet.",
+                ),
+            ),
+        ),
+    ),
+    ProviderSpec(
+        name="gemini",
+        display_name="Gemini API",
+        auth_methods=(
+            ProviderAuthMethodSpec(
+                auth_kind="api_key_env",
+                env_vars=("GOOGLE_API_KEY", "GEMINI_API_KEY"),
+                required_any_env_vars=("GOOGLE_API_KEY", "GEMINI_API_KEY"),
+                notes=(
+                    "Use GOOGLE_API_KEY or GEMINI_API_KEY for Gemini Developer API calls.",
                 ),
             ),
         ),
@@ -201,7 +213,7 @@ def provider_auth_method_specs(
 def _provider_status(spec: ProviderSpec, env: Mapping[str, str]) -> ProviderStatus:
     method = provider_auth_method_specs(spec)[0]
     detected = [name for name in method.env_vars if env.get(name)]
-    missing = [name for name in method.required_env_vars if not env.get(name)]
+    missing = _missing_required_env_vars(method, env)
     ready = method.implemented and not missing
     return {
         "provider": spec.name,
@@ -213,7 +225,7 @@ def _provider_status(spec: ProviderSpec, env: Mapping[str, str]) -> ProviderStat
         "support_status": _support_status(method),
         "auth_kind": method.auth_kind,
         "detected_env_vars": detected,
-        "required_env_vars": list(method.required_env_vars),
+        "required_env_vars": _required_env_var_names(method),
         "missing_env_vars": missing,
         "notes": list(method.notes),
     }
@@ -225,7 +237,7 @@ def _provider_auth_method_option(
     env: Mapping[str, str],
 ) -> ProviderAuthMethodOption:
     detected = [name for name in method.env_vars if env.get(name)]
-    missing = [name for name in method.required_env_vars if not env.get(name)]
+    missing = _missing_required_env_vars(method, env)
     ready = method.implemented and not missing
     return {
         "provider": spec.name,
@@ -237,10 +249,26 @@ def _provider_auth_method_option(
         "selectable": ready,
         "support_status": _support_status(method),
         "detected_env_vars": detected,
-        "required_env_vars": list(method.required_env_vars),
+        "required_env_vars": _required_env_var_names(method),
         "missing_env_vars": missing,
         "notes": list(method.notes),
     }
+
+
+def _missing_required_env_vars(
+    method: ProviderAuthMethodSpec,
+    env: Mapping[str, str],
+) -> list[str]:
+    missing = [name for name in method.required_env_vars if not env.get(name)]
+    if method.required_any_env_vars and not any(
+        env.get(name) for name in method.required_any_env_vars
+    ):
+        missing.extend(method.required_any_env_vars)
+    return missing
+
+
+def _required_env_var_names(method: ProviderAuthMethodSpec) -> list[str]:
+    return [*method.required_env_vars, *method.required_any_env_vars]
 
 
 def _support_status(method: ProviderAuthMethodSpec) -> str:
