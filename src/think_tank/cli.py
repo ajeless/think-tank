@@ -20,13 +20,16 @@ from .engine import (
     MissingModelError,
     MissingPromptError,
     ProjectStateNotFoundError,
+    ProviderValidationInputError,
     ask_project,
     get_engine_status,
+    validate_provider,
 )
 from .model_client import (
     AisuiteModelClient,
     ModelClientCallError,
     ModelClientConfigurationError,
+    OllamaHttpModelRegistry,
 )
 from .workspace import WorkspaceAlreadyExistsError, init_workspace
 
@@ -167,3 +170,47 @@ def config_init(
         console.print("Enabled providers: " + ", ".join(result["enabled_providers"]))
     else:
         console.print("No providers enabled. Run `think config doctor` for setup details.")
+
+
+@config_app.command("validate")
+def config_validate(
+    provider: Annotated[
+        str,
+        typer.Option("--provider", help="Provider name to validate."),
+    ],
+    model: Annotated[
+        str,
+        typer.Option("--model", help="Explicit provider:model identifier to validate."),
+    ],
+) -> None:
+    """Explicitly validate provider credentials and model availability."""
+
+    try:
+        result = validate_provider(
+            provider=provider,
+            model=model,
+            client=AisuiteModelClient(),
+            env=os.environ,
+            ollama_registry=OllamaHttpModelRegistry.from_env(os.environ),
+        )
+    except (MissingModelError, ProviderValidationInputError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    console.print(f"Provider: {result['provider']}")
+    console.print(f"Model: {result['model']}")
+    console.print(f"Status: {_validation_status_label(result['status'])}")
+    console.print(result["message"])
+    if not result["ok"]:
+        raise typer.Exit(1)
+
+
+def _validation_status_label(status: str) -> str:
+    labels = {
+        "success": "success",
+        "missing_credentials": "missing credentials",
+        "auth_failure": "auth failure",
+        "quota_or_rate_limit": "quota/rate limit",
+        "provider_config_error": "provider SDK/config issue",
+        "provider_failure": "provider failure",
+    }
+    return labels[status]

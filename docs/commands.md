@@ -22,6 +22,7 @@ These command shapes are either implemented or reserved as current direction, no
 | `think setup` | Tool-level onboarding, credentials guidance, and first-run setup. |
 | `think config doctor` | Detect provider credentials from the environment without printing secret values. Implemented. |
 | `think config init` | Write non-secret provider configuration from detected credentials. Implemented. |
+| `think config validate --provider <name> --model <provider:model>` | Explicitly validate real provider access for one selected model. Implemented. |
 | `think new <path> --name <name>` | Create a local idea project/workspace. Implemented. |
 | `think ask "<prompt>" --project <path> --model <provider:model>` | Run a single non-interactive model interaction and record its transcript. Implemented. |
 | `think elaborate ...` | Capture a definition, example, clarification, or related note. |
@@ -72,6 +73,23 @@ Current behavior:
 - Writes `~/.config/think-tank/config.toml` by default, or `--config <path>`.
 - Stores provider names, auth kinds, and detected env var names.
 - Does not store API keys, bearer tokens, subscription tokens, or default models.
+
+### `think config validate --provider <name> --model <provider:model>`
+
+Intent: explicitly verify that Think Tank can reach one real provider/model path.
+
+Why it exists: `doctor` only checks whether required credential names are visible. A separate validation command lets the user choose when to spend provider quota, exercise remote authentication, or contact a local Ollama server.
+
+Current status: implemented.
+
+Current behavior:
+
+- Requires both `--provider <name>` and `--model <provider:model>`.
+- Requires the model provider prefix to match `--provider`.
+- Sends a tiny validation prompt to remote providers only after required credentials are present.
+- Reports success, missing credentials, auth failure, quota/rate limit, provider SDK/config issues, and generic provider failure.
+- Checks Ollama server availability through `OLLAMA_API_URL` or `http://localhost:11434` and verifies the requested model is installed.
+- Does not write transcripts, mutate project state, choose fallback models, store secrets, or run as part of `doctor` or `init`.
 
 ### `think ask "<prompt>" --project <path> --model <provider:model>`
 
