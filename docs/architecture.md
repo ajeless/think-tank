@@ -35,7 +35,7 @@ If no model is supplied through one of those sources, the engine must fail with 
 
 The current aisuite-backed client is intentionally thin. Unit tests should use a fake model client so test runs do not hit provider APIs or depend on network access.
 
-The packaged provider set is intentionally limited to the providers in active early use: OpenAI, Anthropic, Google, Ollama, and OpenRouter. OpenAI, Anthropic, Google, and Ollama use aisuite provider support directly. OpenRouter is routed through OpenRouter's OpenAI-compatible API because the installed aisuite version does not expose a first-class OpenRouter provider.
+The packaged provider set is intentionally limited to the providers in active early use: OpenAI, Anthropic, Google, Ollama, OpenRouter, and Groq. OpenAI, Anthropic, Google, and Ollama use aisuite provider support directly. OpenRouter and Groq are routed through their OpenAI-compatible APIs because the installed aisuite version does not expose first-class providers for those routes.
 
 ## Provider Onboarding And Secrets
 

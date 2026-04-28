@@ -93,6 +93,14 @@ PROVIDER_SPECS: tuple[ProviderSpec, ...] = (
         required_env_vars=("OPENROUTER_API_KEY",),
         notes=("OpenRouter is routed through its OpenAI-compatible API.",),
     ),
+    ProviderSpec(
+        name="groq",
+        display_name="Groq",
+        auth_kind="api_key_env",
+        env_vars=("GROQ_API_KEY",),
+        required_env_vars=("GROQ_API_KEY",),
+        notes=("Groq is routed through its OpenAI-compatible API.",),
+    ),
 )
 
 

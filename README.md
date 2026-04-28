@@ -2,7 +2,7 @@
 
 Think Tank is a local-first idea workspace where a human and multiple AI agents develop ideas into durable, searchable, versioned artifacts.
 
-This repository is being bootstrapped incrementally. The current slice provides the Python package, CLI entrypoint, test harness, initial local workspace creation, and a minimal one-model `ask` path that records transcripts.
+This repository is being bootstrapped incrementally. The current implementation provides the Python package, CLI entrypoint, test harness, local workspace creation, provider credential diagnostics, explicit provider validation, and a minimal one-model `ask` path that records transcripts.
 
 ## Design Notes
 
@@ -77,5 +77,6 @@ Packaged model-provider support currently includes:
 - Google: `google:<model>` with Google/Vertex credentials supported by aisuite.
 - Ollama: `ollama:<model>` with a local Ollama server, defaulting to `http://localhost:11434`.
 - OpenRouter: `openrouter:<model>` with `OPENROUTER_API_KEY`, routed through OpenRouter's OpenAI-compatible API.
+- Groq: `groq:<model>` with `GROQ_API_KEY`, routed through Groq's OpenAI-compatible API.
 
 Think Tank does not store provider secrets. Provider credentials are read from environment variables, and config files store only non-secret metadata such as enabled provider names and detected env var names. Provider subscription sign-in is not implemented unless a provider exposes a supported auth path for third-party tools; Think Tank will not silently switch from subscription auth to API billing.

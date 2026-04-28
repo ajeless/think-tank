@@ -5,13 +5,17 @@ import pytest
 from think_tank.model_client import (
     AisuiteModelClient,
     DEFAULT_OLLAMA_API_URL,
+    GROQ_BASE_URL,
     ModelClientCallError,
     ModelClientAuthenticationError,
     ModelClientConfigurationError,
     ModelClientQuotaOrRateLimitError,
+    OPENROUTER_BASE_URL,
     OllamaHttpModelRegistry,
     OllamaRegistryError,
     _new_aisuite_client,
+    _new_groq_client,
+    _new_openai_compatible_client,
     _new_openrouter_client,
 )
 
@@ -104,11 +108,102 @@ def test_aisuite_model_client_routes_openrouter_to_openai_compatible_provider() 
     ]
 
 
+def test_aisuite_model_client_routes_groq_to_openai_compatible_provider() -> None:
+    fake_client = FakeAisuiteClient()
+    client = AisuiteModelClient(client=fake_client)
+
+    response = client.complete(
+        model="groq:llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": "Hello"}],
+    )
+
+    assert response.content == "fake completion"
+    assert fake_client.completions.calls == [
+        {
+            "model": "openai:llama-3.3-70b-versatile",
+            "messages": [{"role": "user", "content": "Hello"}],
+        }
+    ]
+
+
 def test_openrouter_client_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
     with pytest.raises(ModelClientConfigurationError, match="OPENROUTER_API_KEY"):
         _new_openrouter_client()
+
+
+def test_groq_client_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+
+    with pytest.raises(ModelClientConfigurationError, match="GROQ_API_KEY"):
+        _new_groq_client()
+
+
+def test_openai_compatible_client_uses_supplied_api_key_and_base_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_new_aisuite_client(provider_configs):
+        calls.append(provider_configs)
+        return FakeAisuiteClient()
+
+    monkeypatch.setenv("TEST_API_KEY", "secret")
+    monkeypatch.setattr(
+        "think_tank.model_client._new_aisuite_client",
+        fake_new_aisuite_client,
+    )
+
+    _new_openai_compatible_client(
+        provider="TestProvider",
+        api_key_env_var="TEST_API_KEY",
+        base_url="https://example.test/v1",
+    )
+
+    assert calls == [
+        {
+            "openai": {
+                "api_key": "secret",
+                "base_url": "https://example.test/v1",
+            }
+        }
+    ]
+
+
+def test_openrouter_and_groq_clients_use_distinct_base_urls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_new_aisuite_client(provider_configs):
+        calls.append(provider_configs)
+        return FakeAisuiteClient()
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "or-secret")
+    monkeypatch.setenv("GROQ_API_KEY", "gsk-secret")
+    monkeypatch.setattr(
+        "think_tank.model_client._new_aisuite_client",
+        fake_new_aisuite_client,
+    )
+
+    _new_openrouter_client()
+    _new_groq_client()
+
+    assert calls == [
+        {
+            "openai": {
+                "api_key": "or-secret",
+                "base_url": OPENROUTER_BASE_URL,
+            }
+        },
+        {
+            "openai": {
+                "api_key": "gsk-secret",
+                "base_url": GROQ_BASE_URL,
+            }
+        },
+    ]
 
 
 def test_aisuite_model_client_wraps_provider_call_errors() -> None:

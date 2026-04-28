@@ -11,6 +11,7 @@ from typing import Any, Mapping, Protocol, TypedDict
 
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 DEFAULT_OLLAMA_API_URL = "http://localhost:11434"
 
 
@@ -134,6 +135,11 @@ class AisuiteModelClient:
             client = self._client or _new_openrouter_client()
             return client, f"openai:{openrouter_model}"
 
+        if model.startswith("groq:"):
+            groq_model = model.split(":", 1)[1]
+            client = self._client or _new_groq_client()
+            return client, f"openai:{groq_model}"
+
         return self._client or _new_aisuite_client(), model
 
 
@@ -146,17 +152,38 @@ def _new_aisuite_client(provider_configs: dict[str, dict[str, Any]] | None = Non
 
 
 def _new_openrouter_client() -> Any:
-    api_key = os.getenv("OPENROUTER_API_KEY")
+    return _new_openai_compatible_client(
+        provider="OpenRouter",
+        api_key_env_var="OPENROUTER_API_KEY",
+        base_url=OPENROUTER_BASE_URL,
+    )
+
+
+def _new_groq_client() -> Any:
+    return _new_openai_compatible_client(
+        provider="Groq",
+        api_key_env_var="GROQ_API_KEY",
+        base_url=GROQ_BASE_URL,
+    )
+
+
+def _new_openai_compatible_client(
+    *,
+    provider: str,
+    api_key_env_var: str,
+    base_url: str,
+) -> Any:
+    api_key = os.getenv(api_key_env_var)
     if not api_key:
         raise ModelClientConfigurationError(
-            "OpenRouter requires OPENROUTER_API_KEY in the environment."
+            f"{provider} requires {api_key_env_var} in the environment."
         )
 
     return _new_aisuite_client(
         provider_configs={
             "openai": {
                 "api_key": api_key,
-                "base_url": OPENROUTER_BASE_URL,
+                "base_url": base_url,
             }
         }
     )

@@ -52,7 +52,7 @@ Current status: implemented.
 
 Current behavior:
 
-- Detects provider environment variable names for OpenAI, Anthropic, Google Vertex AI, Ollama, and OpenRouter.
+- Detects provider environment variable names for OpenAI, Anthropic, Google Vertex AI, Ollama, OpenRouter, and Groq.
 - Reports missing required environment variable names.
 - Prints env var names only, never env var values.
 - Supports `--json` for machine-readable output.
@@ -114,8 +114,9 @@ Packaged providers:
 - `google:<model>`
 - `ollama:<model>`
 - `openrouter:<model>`
+- `groq:<model>`
 
-`openrouter:<model>` is a Think Tank adapter convention for OpenRouter's OpenAI-compatible API. The installed aisuite version does not expose a first-class `openrouter` provider.
+`openrouter:<model>` and `groq:<model>` are Think Tank adapter conventions for those providers' OpenAI-compatible APIs. The installed aisuite version does not expose first-class providers for those routes.
 
 Current non-goals:
 
