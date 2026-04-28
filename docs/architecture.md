@@ -67,7 +67,7 @@ Ollama is local-provider validation rather than credential validation. The valid
 
 Provider metadata is owned by the provider registry layer, not by CLI command code or config file mutation code. Engine behavior and config behavior may both depend on the packaged provider registry, but the registry should stay focused on supported provider names, auth method metadata, and environment-based readiness detection. Packaged provider specs use explicit auth method records as their only auth shape.
 
-User config file concerns are separate from provider metadata. Config storage helpers own default config path resolution, TOML loading errors, text writing, and TOML string escaping. Higher-level config behavior owns the meaning of auth records, model profiles, and explicit defaults.
+User config file concerns are separate from provider metadata. Config storage helpers own default config path resolution, TOML loading errors, text writing, and TOML string escaping. Shared config helpers own TOML table validation and rendering. Higher-level config behavior is split by product concern: auth records, model profiles, and explicit defaults each have their own module. `think_tank.config` remains a compatibility facade for CLI and external imports; it should not regain behavior ownership.
 
 ### Auth Model Direction
 
