@@ -30,6 +30,7 @@ These command shapes are either implemented or reserved as current direction, no
 | `think config auth add <provider>` | Add or enable a provider auth path through setup-only guidance. Implemented. |
 | `think config auth list` | List enabled provider auth metadata without secrets. Implemented. |
 | `think config auth remove <provider>` | Remove or disable a provider auth path from Think Tank config. Implemented. |
+| `think config integrations ...` | Possible future namespace for product-specific integrations such as Claude Code. Reserved, not implemented. |
 | `think config model add <name> --model <provider:model>` | Store a named non-secret model profile. Implemented. |
 | `think config model list` | List named model profiles. Implemented. |
 | `think config model remove <name>` | Remove a named model profile. Implemented. |
@@ -77,6 +78,7 @@ Rules to preserve:
 - Work commands must remain non-interactive.
 - Any default written by setup must be explicit user-authored config, not an invented product default.
 - Subscription-style auth may be offered only through official supported provider paths, and product-specific subscription paths must not be represented as generic API provider auth.
+- Claude Code subscription OAuth must not be represented as direct `anthropic` API auth.
 - Fallback between auth methods or providers must remain explicit user-authored policy, never automatic recovery.
 
 ### `think new <path> --name <name>`
@@ -169,6 +171,13 @@ Current `auth methods` behavior:
 - Supports `--json` for machine-readable output.
 - Does not print secret values.
 - Does not call provider APIs or validate credentials.
+
+Claude Code note:
+
+- `anthropic` auth methods describe the direct Anthropic API path, currently `api_key_env`.
+- Claude Code subscription OAuth is a product-specific path, not a generic Anthropic API provider auth method.
+- A future Claude Code integration should be explicit, likely outside `think config auth add anthropic`, because it would call Claude Code or the Claude Code/Agent SDK rather than the direct Messages API client.
+- `CLAUDE_CODE_OAUTH_TOKEN` and Claude Code credential files are secrets and must not be written to Think Tank config.
 
 Current `auth doctor` behavior:
 

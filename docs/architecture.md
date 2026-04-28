@@ -53,6 +53,8 @@ Setup commands may guide users through provider detection and configuration. Top
 
 Subscription account sign-in is provider-specific and only acceptable through an official supported auth path. The tool must not implement unsupported subscription-token workarounds, and it must not silently fall back from subscription auth to API billing. Any validation that could spend money or hit external provider rate limits must be opt-in.
 
+Claude Code subscription auth is a separate integration candidate, not a replacement credential for the direct Anthropic API provider. The direct `anthropic:<model>` path remains Anthropic API access through `api_key_env`. A future Claude Code path must be modeled as a product-specific integration or adapter with its own command contract, auth detection, validation, transcript shape, and limitations.
+
 Provider failures are product errors, not Python tracebacks. The CLI should surface concise messages for missing credentials, quota failures, authentication failures, and provider SDK issues without leaking secret values.
 
 `think config validate` is the explicit real-provider diagnostic boundary. It belongs in setup/config space, not work-command behavior. Validation may spend provider quota or hit external rate limits, so it is opt-in and never runs as part of `doctor`, `init`, or `ask` by default. The engine owns the validation behavior and returns structured status data; the CLI only formats that status and chooses the process exit code.
@@ -156,6 +158,35 @@ Current research snapshot, as of April 28, 2026:
 | OpenRouter | Docs document bearer API keys and account credit limits. | Keep explicit `api_key_env`; useful for budgets/limits but not subscription auth. |
 | Groq | Docs document bearer API keys through OpenAI-compatible endpoints. | Keep explicit `api_key_env`; no subscription path currently documented for Think Tank. |
 
+### Claude Code Subscription Auth Design Direction
+
+This section records the first design boundary for Claude Code subscription-backed auth, verified against official docs on April 28, 2026.
+
+Current facts:
+
+- The Claude API is a REST API for programmatic access and requires a Claude Console account plus an API key. Direct API requests require the `x-api-key` header. A paid Claude subscription does not include Claude API or Console access.
+- Claude Code is a separate Anthropic product and supports Claude Pro, Max, Team, and Enterprise subscription OAuth through Claude.ai login. It also supports Console auth, cloud-provider auth, `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `apiKeyHelper`, and `CLAUDE_CODE_OAUTH_TOKEN` with its own precedence rules.
+- Claude Code can generate a long-lived OAuth token with `claude setup-token`; the token is printed for the user to place in `CLAUDE_CODE_OAUTH_TOKEN`. That token is a secret and must not be stored in Think Tank config or project state.
+- Claude Code CLI has non-interactive print mode via `claude -p`, including JSON output options. This makes a future subprocess adapter plausible, but it would be a Claude Code integration with Claude Code behavior, not a direct Anthropic Messages API client.
+- The Claude Agent SDK docs say third-party developers may not offer claude.ai login or rate limits for their products without prior approval and should use the documented API-key auth methods. That blocks a direct SDK-based subscription-login implementation unless Anthropic explicitly approves it for Think Tank's use case.
+
+Design decision:
+
+- Keep the current `anthropic` provider path as direct Anthropic API access through `api_key_env`.
+- Do not represent Claude Code subscription OAuth as `anthropic:...` auth.
+- Do not read, parse, copy, or reuse Claude Code's stored credential files.
+- Do not store `CLAUDE_CODE_OAUTH_TOKEN`, bearer tokens, refresh tokens, browser cookies, or Claude Code credential dumps.
+- Treat Claude Code as a future product-specific integration, likely a separate adapter surfaced explicitly by command/profile configuration after the model profile schema can distinguish generic `provider:model` API clients from tool/product adapters.
+- Prefer a future implementation that shells out to the installed `claude` CLI in non-interactive print mode using user-managed Claude Code auth, with explicit user opt-in and clear transcript/cost semantics.
+- Any future Claude Code integration must disable or tightly constrain editing/tool permissions unless the command is explicitly a code-agent workflow. It must not silently gain file-editing or shell-execution behavior inside a plain ideation command.
+
+Open implementation questions:
+
+- Whether Think Tank should add a new adapter namespace such as `claude_code` or a more general integration profile type instead of extending the current `provider:model` model profile grammar.
+- Whether `think config auth methods` should keep listing Anthropic `subscription_official` as a planned path, or split it into a separate `think config integrations methods` surface once product integrations exist.
+- Whether validation should call `claude auth status --json`, run a tiny `claude -p` request, or offer both as separate diagnostics with clear quota and behavior warnings.
+- How to represent Claude Code output and usage metadata in transcripts without pretending it is the same row shape as direct model API calls.
+
 Research source links for this snapshot:
 
 - OpenAI API authentication: https://platform.openai.com/docs/api-reference/authentication
@@ -164,6 +195,8 @@ Research source links for this snapshot:
 - Anthropic API authentication: https://docs.anthropic.com/en/api/getting-started
 - Anthropic Claude.ai/API billing separation: https://support.anthropic.com/en/articles/9876003
 - Claude Code authentication: https://code.claude.com/docs/en/iam
+- Claude Code CLI reference: https://code.claude.com/docs/en/cli-reference
+- Claude Agent SDK overview: https://code.claude.com/docs/en/agent-sdk/overview
 - Google Gemini OAuth: https://ai.google.dev/gemini-api/docs/oauth
 - Google Vertex AI Application Default Credentials: https://cloud.google.com/vertex-ai/generative-ai/docs/start/gcp-auth
 - OpenRouter API authentication: https://openrouter.ai/docs/api-reference/authentication
