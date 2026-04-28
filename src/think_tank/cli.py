@@ -21,6 +21,7 @@ from .config import (
     ProviderAuthNotReadyError,
     default_config_path,
     detect_provider_statuses,
+    list_model_profiles,
     provider_auth_method_options,
     resolve_model_profile,
 )
@@ -36,7 +37,7 @@ from .model_client import (
     ModelClientCallError,
     ModelClientConfigurationError,
 )
-from .setup import SetupAuthSelection, initialize_setup
+from .setup import SetupAuthSelection, SetupModelProfileInput, initialize_setup
 from .workspace import WorkspaceAlreadyExistsError, init_workspace
 
 
@@ -94,16 +95,19 @@ def init_setup(
 
     config_path = config or default_config_path(os.environ)
     auth_selections = _selected_init_auth_paths(config_path=config_path)
-    model_profile_name, model, set_default = _selected_init_model_profile()
+    model_profiles = _selected_init_model_profiles()
+    default_model_profile = _selected_init_default_model_profile(
+        config_path=config_path,
+        model_profiles=model_profiles,
+    )
 
     try:
         result = initialize_setup(
             config_path,
             env=os.environ,
             auth_selections=auth_selections,
-            model_profile_name=model_profile_name,
-            model=model,
-            set_default_model_profile=set_default,
+            model_profiles=model_profiles,
+            default_model_profile=default_model_profile,
         )
     except (
         ConfigFormatError,
@@ -124,8 +128,7 @@ def init_setup(
         )
     else:
         console.print("No provider auth paths enabled.")
-    if result["model_profile"]:
-        profile = result["model_profile"]
+    for profile in result["model_profiles"]:
         console.print(f"Model profile: {profile['name']} = {profile['model']}")
     if result["default_model_profile"]:
         console.print(f"Explicit default model profile: {result['default_model_profile']}")
@@ -232,26 +235,83 @@ def _init_auth_path_choice_title(option: dict[str, object]) -> str:
     )
 
 
-def _selected_init_model_profile() -> tuple[str | None, str | None, bool]:
+def _selected_init_model_profiles() -> list[SetupModelProfileInput]:
+    model_profiles: list[SetupModelProfileInput] = []
     create_profile = questionary.confirm(
         "Create a named model profile?",
         default=False,
     ).ask()
     if create_profile is None:
         raise typer.Abort()
-    if not create_profile:
-        return None, None, False
 
+    while create_profile:
+        model_profiles.append(_entered_init_model_profile())
+        create_profile = questionary.confirm(
+            "Add another model profile?",
+            default=False,
+        ).ask()
+        if create_profile is None:
+            raise typer.Abort()
+    return model_profiles
+
+
+def _entered_init_model_profile() -> SetupModelProfileInput:
     name = questionary.text("Profile name:").ask()
     if name is None:
         raise typer.Abort()
     model = questionary.text("Model string (provider:model):").ask()
     if model is None:
         raise typer.Abort()
+    return {"name": name, "model": model}
+
+
+def _selected_init_default_model_profile(
+    *,
+    config_path: Path,
+    model_profiles: list[SetupModelProfileInput],
+) -> str | None:
+    profile_names = _init_default_model_profile_names(
+        config_path=config_path,
+        model_profiles=model_profiles,
+    )
+    if not profile_names:
+        return None
+
     set_default = questionary.confirm(
-        "Set this profile as an explicit default?",
+        "Set an explicit default model profile?",
         default=False,
     ).ask()
     if set_default is None:
         raise typer.Abort()
-    return name, model, set_default
+    if not set_default:
+        return None
+
+    selected = questionary.select(
+        "Default model profile:",
+        choices=profile_names,
+    ).ask()
+    if selected is None:
+        raise typer.Abort()
+    return selected
+
+
+def _init_default_model_profile_names(
+    *,
+    config_path: Path,
+    model_profiles: list[SetupModelProfileInput],
+) -> list[str]:
+    names: list[str] = []
+    try:
+        existing_profiles = list_model_profiles(config_path)["profiles"]
+    except ConfigNotFoundError:
+        existing_profiles = []
+    except ConfigFormatError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    for profile in existing_profiles:
+        if profile["name"] not in names:
+            names.append(profile["name"])
+    for profile in model_profiles:
+        name = profile["name"].strip()
+        if name and name not in names:
+            names.append(name)
+    return names

@@ -9,8 +9,13 @@ from cli_helpers import FakeQuestionaryResponse, runner
 def test_cli_init_guides_auth_profile_and_default_without_storing_secrets(
     monkeypatch,
 ) -> None:
-    confirm_answers = iter([True, True])
-    text_answers = iter(["fast", "openai:gpt-4o"])
+    confirm_answers = iter([True, True, False, True])
+    text_answers = iter([
+        "fast",
+        "openai:gpt-4o",
+        "local",
+        "ollama:llama3.2:latest",
+    ])
 
     monkeypatch.setattr(
         "think_tank.cli.questionary.checkbox",
@@ -29,6 +34,10 @@ def test_cli_init_guides_auth_profile_and_default_without_storing_secrets(
         "think_tank.cli.questionary.text",
         lambda *args, **kwargs: FakeQuestionaryResponse(next(text_answers)),
     )
+    monkeypatch.setattr(
+        "think_tank.cli.questionary.select",
+        lambda *args, **kwargs: FakeQuestionaryResponse("local"),
+    )
 
     with runner.isolated_filesystem():
         result = runner.invoke(
@@ -42,14 +51,46 @@ def test_cli_init_guides_auth_profile_and_default_without_storing_secrets(
     assert "Wrote config:" in result.output
     assert "Enabled auth paths: openai:api_key_env, ollama:local_server" in result.output
     assert "Model profile: fast = openai:gpt-4o" in result.output
-    assert "Explicit default model profile: fast" in result.output
+    assert "Model profile: local = ollama:llama3.2:latest" in result.output
+    assert "Explicit default model profile: local" in result.output
     assert "Secret values were not stored." in result.output
     assert "Work commands do not use defaults automatically yet." in result.output
     assert "sk-secret" not in result.output
     assert "sk-secret" not in config_text
     assert "OPENAI_API_KEY" in config_text
     assert '[models."fast"]' in config_text
+    assert '[models."local"]' in config_text
     assert "[defaults]" in config_text
+
+
+def test_cli_init_can_skip_default_after_creating_profile(monkeypatch) -> None:
+    confirm_answers = iter([True, False, False])
+    text_answers = iter(["fast", "openai:gpt-4o"])
+
+    monkeypatch.setattr(
+        "think_tank.cli.questionary.checkbox",
+        lambda *args, **kwargs: FakeQuestionaryResponse(
+            [{"provider": "ollama", "auth_kind": "local_server"}]
+        ),
+    )
+    monkeypatch.setattr(
+        "think_tank.cli.questionary.confirm",
+        lambda *args, **kwargs: FakeQuestionaryResponse(next(confirm_answers)),
+    )
+    monkeypatch.setattr(
+        "think_tank.cli.questionary.text",
+        lambda *args, **kwargs: FakeQuestionaryResponse(next(text_answers)),
+    )
+
+    with runner.isolated_filesystem():
+        result = runner.invoke(app, ["init", "--config", "config.toml"])
+        config_text = Path("config.toml").read_text(encoding="utf-8")
+
+    assert result.exit_code == 0
+    assert "Model profile: fast = openai:gpt-4o" in result.output
+    assert "Explicit default model profile:" not in result.output
+    assert '[models."fast"]' in config_text
+    assert "[defaults]" not in config_text
 
 
 def test_cli_init_can_skip_model_profile(monkeypatch) -> None:
@@ -74,8 +115,50 @@ def test_cli_init_can_skip_model_profile(monkeypatch) -> None:
     assert "[defaults]" not in config_text
 
 
+def test_cli_init_can_set_existing_profile_as_default(monkeypatch) -> None:
+    confirm_answers = iter([False, True])
+
+    monkeypatch.setattr(
+        "think_tank.cli.questionary.checkbox",
+        lambda *args, **kwargs: FakeQuestionaryResponse(
+            [{"provider": "ollama", "auth_kind": "local_server"}]
+        ),
+    )
+    monkeypatch.setattr(
+        "think_tank.cli.questionary.confirm",
+        lambda *args, **kwargs: FakeQuestionaryResponse(next(confirm_answers)),
+    )
+    monkeypatch.setattr(
+        "think_tank.cli.questionary.select",
+        lambda *args, **kwargs: FakeQuestionaryResponse("fast"),
+    )
+
+    with runner.isolated_filesystem():
+        add_result = runner.invoke(
+            app,
+            [
+                "config",
+                "model",
+                "add",
+                "fast",
+                "--model",
+                "openai:gpt-4o",
+                "--config",
+                "config.toml",
+            ],
+        )
+        init_result = runner.invoke(app, ["init", "--config", "config.toml"])
+        config_text = Path("config.toml").read_text(encoding="utf-8")
+
+    assert add_result.exit_code == 0
+    assert init_result.exit_code == 0
+    assert "Explicit default model profile: fast" in init_result.output
+    assert '[models."fast"]' in config_text
+    assert 'model_profile = "fast"' in config_text
+
+
 def test_cli_init_default_does_not_make_ask_use_defaults(monkeypatch) -> None:
-    confirm_answers = iter([True, True])
+    confirm_answers = iter([True, False, True])
     text_answers = iter(["fast", "openai:gpt-4o"])
 
     monkeypatch.setattr(
@@ -91,6 +174,10 @@ def test_cli_init_default_does_not_make_ask_use_defaults(monkeypatch) -> None:
     monkeypatch.setattr(
         "think_tank.cli.questionary.text",
         lambda *args, **kwargs: FakeQuestionaryResponse(next(text_answers)),
+    )
+    monkeypatch.setattr(
+        "think_tank.cli.questionary.select",
+        lambda *args, **kwargs: FakeQuestionaryResponse("fast"),
     )
 
     with runner.isolated_filesystem():

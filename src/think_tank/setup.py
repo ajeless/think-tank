@@ -29,10 +29,15 @@ class SetupAuthConfig(TypedDict):
     auth_methods: list[AuthMethodConfig]
 
 
+class SetupModelProfileInput(TypedDict):
+    name: str
+    model: str
+
+
 class SetupInitResult(TypedDict):
     config_path: str
     auth_paths: list[SetupAuthConfig]
-    model_profile: ModelAddResult | None
+    model_profiles: list[ModelAddResult]
     default_model_profile: str | None
 
 
@@ -41,12 +46,12 @@ def initialize_setup(
     *,
     env: Mapping[str, str],
     auth_selections: list[SetupAuthSelection],
-    model_profile_name: str | None = None,
-    model: str | None = None,
-    set_default_model_profile: bool = False,
+    model_profiles: list[SetupModelProfileInput] | None = None,
+    default_model_profile: str | None = None,
 ) -> SetupInitResult:
     """Apply guided setup choices to non-secret user config."""
 
+    model_profiles = [] if model_profiles is None else model_profiles
     resolved_path = config_path.expanduser()
     auth_paths = _write_selected_auth_metadata(
         resolved_path,
@@ -54,31 +59,21 @@ def initialize_setup(
         auth_selections=auth_selections,
     )
 
-    profile_result: ModelAddResult | None = None
-    if model_profile_name is not None or model is not None:
-        if model_profile_name is None or model is None:
-            raise ValueError("model profile setup requires a name and provider:model")
-        profile_result = add_model_profile(
-            resolved_path,
-            name=model_profile_name,
-            model=model,
-        )
+    profile_results = _add_model_profiles(resolved_path, model_profiles)
 
-    default_model_profile: str | None = None
-    if set_default_model_profile:
-        if profile_result is None:
-            raise ValueError("default model profile setup requires a model profile")
+    selected_default_profile: str | None = None
+    if default_model_profile:
         defaults_result = set_config_defaults(
             resolved_path,
-            model_profile=profile_result["name"],
+            model_profile=default_model_profile,
         )
-        default_model_profile = defaults_result["defaults"]["model_profile"]
+        selected_default_profile = defaults_result["defaults"]["model_profile"]
 
     return {
         "config_path": str(resolved_path),
         "auth_paths": auth_paths,
-        "model_profile": profile_result,
-        "default_model_profile": default_model_profile,
+        "model_profiles": profile_results,
+        "default_model_profile": selected_default_profile,
     }
 
 
@@ -141,6 +136,20 @@ def _write_selected_auth_metadata(
         provider_tables=current_provider_tables,
     )
     return auth_paths
+
+
+def _add_model_profiles(
+    config_path: Path,
+    model_profiles: list[SetupModelProfileInput],
+) -> list[ModelAddResult]:
+    results: list[ModelAddResult] = []
+    for profile in model_profiles:
+        name = profile.get("name")
+        model = profile.get("model")
+        if name is None or model is None:
+            raise ValueError("model profile setup requires a name and provider:model")
+        results.append(add_model_profile(config_path, name=name, model=model))
+    return results
 
 
 def _ready_auth_option(
