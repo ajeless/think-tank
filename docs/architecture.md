@@ -81,7 +81,7 @@ Future auth setup should keep this separation:
 
 - Discovery commands inspect what is already present and print names, not values.
 - Add/init commands may prompt because they are setup commands.
-- A future guided setup command may help the user select an auth method, model profiles, or explicit defaults, but those choices must be visible user-authored configuration.
+- Setup commands may help the user select an implemented ready auth method, model profiles, or explicit defaults, but those choices must be visible user-authored configuration.
 - Work commands never prompt and never ask the user to choose credentials mid-run.
 - Validation commands remain explicit opt-in because they can call provider APIs.
 - Config may record enabled provider names, auth kinds, env var names, and non-secret preference metadata.
@@ -99,7 +99,9 @@ Explicit defaults, if added later, are different from hidden defaults. A setup f
 
 Unsupported auth paths are out of scope until the provider documents them for third-party tools. Browser-cookie scraping, private subscription-token reuse, or undocumented app-token extraction would violate the no-middleman and no-surprise-billing principles even if technically possible.
 
-Provider config supports multiple auth method records per provider. The current flat `auth_kind` and `env_vars` fields remain the selected/current method and keep existing config readable. New writes also include an `auth_methods` collection under each provider so future setup flows can add official OAuth, service-account, local-server, or subscription-supported methods without treating them as fallback paths. Existing flat provider metadata is still accepted and is normalized in engine results.
+Provider config supports multiple auth method records per provider. The current flat `auth_kind` and `env_vars` fields remain the selected/current method and keep existing config readable. New writes also include an `auth_methods` collection under each provider so setup flows can add official OAuth, service-account, local-server, or subscription-supported methods without treating them as fallback paths. Existing flat provider metadata is still accepted and is normalized in engine results.
+
+`think config auth add` may select among multiple ready auth methods when a provider has more than one implemented method. `--yes` remains deterministic and uses the provider's current primary implemented method. Subscription/OAuth-style methods must not be listed as selectable until they are backed by an official supported provider path.
 
 ### Provider Auth Matrix
 

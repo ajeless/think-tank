@@ -125,13 +125,14 @@ Current `auth add` behavior:
 - Requires the provider to be in the packaged provider set.
 - Requires required environment variables to be visible for API-key or Vertex providers before recording metadata.
 - Supports Ollama/local-server metadata without requiring a secret.
+- In interactive mode, prompts for auth method selection when a provider has more than one implemented ready method.
 - Records provider name, selected auth kind, detected env var names, and an auth method record for the selected/current method only.
-- Supports `--yes` for non-interactive setup/test use.
+- Supports `--yes` for non-interactive setup/test use; `--yes` uses the provider's current primary implemented method and does not select fallback methods.
 - Does not store API keys, bearer tokens, refresh tokens, subscription tokens, browser cookies, provider session dumps, or default models.
 
 Future behavior:
 
-- `auth add` may prompt interactively for setup choices beyond the current confirmation prompt, including auth method choice when a provider has more than one supported method.
+- `auth add` may prompt interactively for setup choices beyond the current confirmation and method-selection prompts.
 - `auth add` may record additional non-secret preferences.
 - `auth list` should make any user-authored fallback policy visible if fallback policies are added later.
 - No command may silently switch from subscription/OAuth-style auth to API-key billing.

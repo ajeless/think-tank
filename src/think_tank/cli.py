@@ -23,6 +23,7 @@ from .config import (
     doctor_config_auth,
     list_config_auth,
     list_model_profiles,
+    provider_auth_method_options,
     remove_config_auth,
     remove_model_profile,
     resolve_model_profile,
@@ -343,16 +344,24 @@ def config_auth_add(
     """Add provider auth metadata to Think Tank config without storing secrets."""
 
     config_path = config or default_config_path(os.environ)
+    selected_auth_kind: str | None = None
     if not yes:
-        confirmed = questionary.confirm(
-            f"Add non-secret auth metadata for {provider} to {config_path}?",
-            default=False,
-        ).ask()
-        if not confirmed:
-            raise typer.Abort()
+        try:
+            selected_auth_kind = _selected_auth_kind_for_auth_add(
+                provider=provider,
+                config_path=config_path,
+                env=os.environ,
+            )
+        except ValueError as exc:
+            raise typer.BadParameter(str(exc)) from exc
 
     try:
-        result = add_config_auth(config_path, provider, env=os.environ)
+        result = add_config_auth(
+            config_path,
+            provider,
+            env=os.environ,
+            auth_kind=selected_auth_kind,
+        )
     except (ProviderAuthNotReadyError, ConfigFormatError, ValueError) as exc:
         raise typer.BadParameter(str(exc)) from exc
 
@@ -491,3 +500,42 @@ def _selected_ask_model(
     if model_profile and model_profile.strip():
         return resolve_model_profile(config_path, model_profile)["model"]
     return model
+
+
+def _selected_auth_kind_for_auth_add(
+    *,
+    provider: str,
+    config_path: Path,
+    env: dict[str, str],
+) -> str | None:
+    options = provider_auth_method_options(provider, env=env)
+    ready_options = [option for option in options if option["ready"]]
+
+    if len(ready_options) > 1:
+        selected = questionary.select(
+            f"Select auth method for {provider}:",
+            choices=[
+                questionary.Choice(
+                    title=_auth_method_choice_title(option),
+                    value=option["auth_kind"],
+                )
+                for option in ready_options
+            ],
+        ).ask()
+        if selected is None:
+            raise typer.Abort()
+        return selected
+
+    confirmed = questionary.confirm(
+        f"Add non-secret auth metadata for {provider} to {config_path}?",
+        default=False,
+    ).ask()
+    if not confirmed:
+        raise typer.Abort()
+    return ready_options[0]["auth_kind"] if ready_options else None
+
+
+def _auth_method_choice_title(option: dict[str, object]) -> str:
+    env_vars = option.get("detected_env_vars", [])
+    env_text = ", ".join(env_vars) if isinstance(env_vars, list) and env_vars else "-"
+    return f"{option['auth_kind']} (env vars: {env_text})"
