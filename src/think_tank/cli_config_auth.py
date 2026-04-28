@@ -19,6 +19,7 @@ from .config import (
     default_config_path,
     doctor_config_auth,
     list_config_auth,
+    list_provider_auth_methods,
     provider_auth_method_options,
     remove_config_auth,
 )
@@ -145,6 +146,46 @@ def config_auth_list(
             f"env_vars={', '.join(provider['env_vars']) or '-'}"
         )
     console.print("Secret values are not stored in Think Tank config.")
+
+
+@config_auth_app.command("methods")
+def config_auth_methods(
+    provider: Annotated[
+        str | None,
+        typer.Option("--provider", help="Limit output to one provider."),
+    ] = None,
+    json_output: Annotated[bool, typer.Option("--json", help="Emit JSON output.")] = False,
+) -> None:
+    """List known provider auth method capabilities without storing secrets."""
+
+    try:
+        result = list_provider_auth_methods(env=os.environ, provider=provider)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    if json_output:
+        typer.echo(json.dumps(result, indent=2, sort_keys=True))
+        return
+
+    for provider_result in result["providers"]:
+        console.print(
+            f"{provider_result['display_name']} ({provider_result['provider']}):"
+        )
+        for method in provider_result["auth_methods"]:
+            console.print(
+                f"  {method['auth_kind']}: "
+                f"status={method['support_status']}; "
+                f"implemented={'yes' if method['implemented'] else 'no'}; "
+                f"official={'yes' if method['official'] else 'no'}; "
+                f"selectable={'yes' if method['selectable'] else 'no'}; "
+                f"ready={'yes' if method['ready'] else 'no'}; "
+                f"required_env_vars={', '.join(method['required_env_vars']) or '-'}; "
+                f"detected_env_vars={', '.join(method['detected_env_vars']) or '-'}; "
+                f"missing_env_vars={', '.join(method['missing_env_vars']) or '-'}"
+            )
+            for note in method["notes"]:
+                console.print(f"    note: {note}")
+    console.print("Secret values are read from the environment and are never printed.")
 
 
 @config_auth_app.command("remove")

@@ -86,7 +86,7 @@ Provider auth metadata should remain primarily user-level because credentials ar
 
 ### Auth Model Direction
 
-Provider auth is explicit configuration, not an implicit rescue path. Think Tank may help a user discover, enable, disable, or validate auth methods, but it must not invent a billing path or silently escalate from one user-supplied auth method to another.
+Provider auth is explicit configuration, not an implicit rescue path. Think Tank may help a user discover, inspect, enable, disable, or validate auth methods, but it must not invent a billing path or silently escalate from one user-supplied auth method to another.
 
 Auth method names should describe the mechanism, not the provider:
 
@@ -101,6 +101,7 @@ Auth method names should describe the mechanism, not the provider:
 Future auth setup should keep this separation:
 
 - Discovery commands inspect what is already present and print names, not values.
+- Capability commands inspect known provider auth methods and print implementation/readiness metadata, not secret values.
 - Add/init commands may prompt because they are setup commands.
 - Setup commands may help the user select an implemented ready auth method, model profiles, or explicit defaults, but those choices must be visible user-authored configuration.
 - Work commands never prompt and never ask the user to choose credentials mid-run.
@@ -121,6 +122,8 @@ Explicit defaults are different from hidden defaults. A setup flow may offer to 
 Unsupported auth paths are out of scope until the provider documents them for third-party tools. Browser-cookie scraping, private subscription-token reuse, or undocumented app-token extraction would violate the no-middleman and no-surprise-billing principles even if technically possible.
 
 Provider config supports multiple auth method records per provider. The current flat `auth_kind` and `env_vars` fields remain the selected/current method and keep existing config readable. New writes also include an `auth_methods` collection under each provider so setup flows can add implemented official OAuth, service-account, local-server, or subscription-supported methods without treating them as fallback paths. Existing flat provider metadata is still accepted and is normalized in engine results.
+
+`think config auth methods` lists known provider auth method capabilities, including implementation status, official-path status, readiness, selectability, env var names, and notes. It is diagnostic only: it does not read or write config, validate credentials with provider APIs, or print secret values.
 
 `think config auth add` may select among multiple ready auth methods when a provider has more than one implemented method. `--yes` remains deterministic and uses the provider's current primary implemented method. Subscription/OAuth-style methods must not be listed as selectable until they are backed by an official supported provider path.
 

@@ -43,6 +43,16 @@ class AuthListResult(TypedDict):
     providers: list[AuthProviderConfig]
 
 
+class AuthMethodProvider(TypedDict):
+    provider: str
+    display_name: str
+    auth_methods: list[ProviderAuthMethodOption]
+
+
+class AuthMethodsResult(TypedDict):
+    providers: list[AuthMethodProvider]
+
+
 class AuthRemoveResult(TypedDict):
     config_path: str
     removed_provider: str
@@ -150,6 +160,27 @@ def list_config_auth(config_path: Path) -> AuthListResult:
         "config_path": str(resolved_path),
         "providers": providers,
     }
+
+
+def list_provider_auth_methods(
+    *,
+    env: Mapping[str, str],
+    provider: str | None = None,
+) -> AuthMethodsResult:
+    """List known provider auth method capabilities without secret values."""
+
+    provider_names = _auth_methods_provider_names(provider, env=env)
+    providers: list[AuthMethodProvider] = []
+    for name in provider_names:
+        options = provider_auth_method_options(name, env=env)
+        providers.append(
+            {
+                "provider": name,
+                "display_name": options[0]["display_name"],
+                "auth_methods": options,
+            }
+        )
+    return {"providers": providers}
 
 
 def add_config_auth(
@@ -310,6 +341,20 @@ def _selected_auth_method_option(
     raise ValueError(
         f"unsupported auth kind for {provider}: {auth_kind} (supported: {supported})"
     )
+
+
+def _auth_methods_provider_names(
+    provider: str | None,
+    *,
+    env: Mapping[str, str],
+) -> list[str]:
+    if provider is None:
+        return [status["provider"] for status in detect_provider_statuses(env)]
+
+    normalized = provider.strip().lower()
+    if not normalized:
+        raise ValueError("provider name is required")
+    return [normalized]
 
 
 def _doctor_provider_names(

@@ -55,9 +55,10 @@ Write non-secret provider configuration from detected credentials:
 think config init
 ```
 
-Inspect, add, list, or remove non-secret provider auth metadata:
+Inspect provider auth capabilities, then add, list, or remove non-secret provider auth metadata:
 
 ```bash
+think config auth methods
 think config auth doctor
 think config auth add groq --yes
 think config auth list
@@ -125,7 +126,7 @@ Packaged model-provider support currently includes:
 
 Think Tank does not store provider secrets. Provider credentials are read from environment variables, and config files store only non-secret metadata such as enabled provider names and detected env var names. Provider subscription sign-in is not implemented unless a provider exposes a supported auth path for third-party tools; Think Tank will not silently switch from subscription auth to API billing.
 
-The provider registry distinguishes implemented selectable auth paths from planned official paths. Planned paths may appear in guided setup as disabled guidance, but config writes accept only implemented ready paths and still store no secret values.
+The provider registry distinguishes implemented selectable auth paths from planned official paths. Planned paths may appear in guided setup as disabled guidance, and `think config auth methods` lists auth capability metadata without provider API calls. Config writes accept only implemented ready paths and still store no secret values.
 
 Subscription-backed auth is a roadmap priority for reducing live-testing API costs where providers officially support it. Think Tank will treat product-specific subscription auth, such as coding-tool sign-in flows, as separate integrations unless the provider documents that path for general API clients.
 
