@@ -21,7 +21,7 @@ CLI handlers should:
 - Call engine functions.
 - Convert engine results or errors into terminal output and exit codes.
 
-The installed CLI entrypoint is assembled in `think_tank.cli`, but command groups may live in focused CLI modules. Root work commands stay in the root CLI module for now; config command groups live beside it in dedicated modules so interactive setup flows can grow without turning the entrypoint into a behavior owner.
+The installed CLI entrypoint is assembled in `think_tank.cli`, but command groups may live in focused CLI modules. Root work commands stay in the root CLI module for now; config command groups live beside it in dedicated modules so interactive setup flows can grow without turning the entrypoint into a behavior owner. Top-level `think init` is a setup adapter: the CLI owns prompts and terminal formatting, while `think_tank.setup` owns the config orchestration.
 
 ## Model Call Boundary
 
@@ -49,7 +49,7 @@ Config files may also record named model profiles as explicit `provider:model` s
 
 Config files may record explicit user-authored defaults under `[defaults]`. Defaults are setup-owned preferences, not product-invented choices. Work commands may use a recorded default only when their command contract explicitly says they do. Until then, commands such as `think ask` must keep requiring explicit command input or an explicit model profile flag.
 
-Setup commands may guide users through provider detection and configuration. Work commands must stay non-interactive and must not prompt for credentials mid-run.
+Setup commands may guide users through provider detection and configuration. Top-level `think init` is the first guided setup flow: it detects ready auth paths, lets the user select the paths to record, writes non-secret auth metadata, and may create one named model profile plus one explicit default. Work commands must stay non-interactive and must not prompt for credentials mid-run.
 
 Subscription account sign-in is provider-specific and only acceptable through an official supported auth path. The tool must not implement unsupported subscription-token workarounds, and it must not silently fall back from subscription auth to API billing. Any validation that could spend money or hit external provider rate limits must be opt-in.
 
@@ -103,7 +103,7 @@ Fallback rules are deliberately strict:
 - Never fall back from a direct provider key to an aggregator key silently.
 - If fallback policies are added later, they must be user-authored config, visible in `config auth list`, and validated explicitly.
 
-Explicit defaults, if added later, are different from hidden defaults. A setup flow may offer to write a user-selected default model, profile, or auth preference to config. Work commands may then use that recorded configuration only when the command contract says they can. Think Tank must still never invent a default model, choose a billing path, or retry through a fallback path that the user did not configure.
+Explicit defaults are different from hidden defaults. A setup flow may offer to write a user-selected default model profile or auth preference to config. Work commands may then use that recorded configuration only when the command contract says they can. Think Tank must still never invent a default model, choose a billing path, or retry through a fallback path that the user did not configure.
 
 Unsupported auth paths are out of scope until the provider documents them for third-party tools. Browser-cookie scraping, private subscription-token reuse, or undocumented app-token extraction would violate the no-middleman and no-surprise-billing principles even if technically possible.
 
