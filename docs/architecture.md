@@ -99,6 +99,8 @@ Explicit defaults, if added later, are different from hidden defaults. A setup f
 
 Unsupported auth paths are out of scope until the provider documents them for third-party tools. Browser-cookie scraping, private subscription-token reuse, or undocumented app-token extraction would violate the no-middleman and no-surprise-billing principles even if technically possible.
 
+Provider config supports multiple auth method records per provider. The current flat `auth_kind` and `env_vars` fields remain the selected/current method and keep existing config readable. New writes also include an `auth_methods` collection under each provider so future setup flows can add official OAuth, service-account, local-server, or subscription-supported methods without treating them as fallback paths. Existing flat provider metadata is still accepted and is normalized in engine results.
+
 ### Provider Auth Matrix
 
 This matrix captures current direction, not complete implementation.

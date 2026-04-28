@@ -29,10 +29,16 @@ class ConfigInitResult(TypedDict):
     enabled_providers: list[str]
 
 
+class AuthMethodConfig(TypedDict):
+    auth_kind: str
+    env_vars: list[str]
+
+
 class AuthProviderConfig(TypedDict):
     provider: str
     auth_kind: str
     env_vars: list[str]
+    auth_methods: list[AuthMethodConfig]
 
 
 class AuthListResult(TypedDict):
@@ -64,6 +70,7 @@ class AuthDoctorProvider(TypedDict):
     ready: bool
     configured_auth_kind: str
     detected_auth_kind: str
+    configured_auth_methods: list[AuthMethodConfig]
     configured_env_vars: list[str]
     detected_env_vars: list[str]
     missing_env_vars: list[str]
@@ -221,6 +228,12 @@ def write_detected_provider_config(
         provider: {
             "auth_kind": status_by_name[provider]["auth_kind"],
             "env_vars": status_by_name[provider]["detected_env_vars"],
+            "auth_methods": [
+                {
+                    "auth_kind": status_by_name[provider]["auth_kind"],
+                    "env_vars": status_by_name[provider]["detected_env_vars"],
+                }
+            ],
         }
         for provider in selected
     }
@@ -359,6 +372,7 @@ def list_config_auth(config_path: Path) -> AuthListResult:
             "provider": provider,
             "auth_kind": _auth_kind(provider, provider_tables),
             "env_vars": _env_vars(provider, provider_tables),
+            "auth_methods": _auth_methods(provider, provider_tables),
         }
         for provider in _enabled_providers(config)
     ]
@@ -405,6 +419,12 @@ def add_config_auth(
     updated_provider_tables[provider] = {
         "auth_kind": status["auth_kind"],
         "env_vars": status["detected_env_vars"],
+        "auth_methods": [
+            {
+                "auth_kind": status["auth_kind"],
+                "env_vars": status["detected_env_vars"],
+            }
+        ],
     }
 
     resolved_path.parent.mkdir(parents=True, exist_ok=True)
@@ -538,40 +558,6 @@ def _model_string(model: str) -> str:
     return f"{provider}:{provider_model}"
 
 
-def _render_config(statuses: list[ProviderStatus], enabled_providers: list[str]) -> str:
-    lines = [
-        "schema_version = 1",
-        "secrets = \"environment\"",
-        "",
-        "enabled_providers = ["
-    ]
-    for provider in enabled_providers:
-        lines.append(f"  \"{provider}\",")
-    lines.extend([
-        "]",
-        "",
-    ])
-
-    status_by_name = {status["provider"]: status for status in statuses}
-    for provider in enabled_providers:
-        status = status_by_name[provider]
-        lines.extend(
-            [
-                f"[providers.{provider}]",
-                f"auth_kind = \"{status['auth_kind']}\"",
-                "env_vars = [",
-            ]
-        )
-        for env_var in status["detected_env_vars"]:
-            lines.append(f"  \"{env_var}\",")
-        lines.extend([
-            "]",
-            "",
-        ])
-
-    return "\n".join(lines)
-
-
 def _load_existing_config(config_path: Path) -> dict[str, object]:
     if not config_path.exists():
         raise ConfigNotFoundError(f"config not found: {config_path}")
@@ -615,6 +601,9 @@ def _model_tables(config: Mapping[str, object]) -> dict[str, dict[str, object]]:
 
 def _auth_kind(provider: str, provider_tables: Mapping[str, Mapping[str, object]]) -> str:
     value = provider_tables.get(provider, {}).get("auth_kind", "")
+    if value == "":
+        methods = _auth_methods(provider, provider_tables)
+        return methods[0]["auth_kind"] if methods else ""
     if not isinstance(value, str):
         raise ConfigFormatError(f"provider {provider} auth_kind must be a string")
     return value
@@ -622,11 +611,60 @@ def _auth_kind(provider: str, provider_tables: Mapping[str, Mapping[str, object]
 
 def _env_vars(provider: str, provider_tables: Mapping[str, Mapping[str, object]]) -> list[str]:
     value = provider_tables.get(provider, {}).get("env_vars", [])
+    if value == []:
+        methods = _auth_methods(provider, provider_tables)
+        return methods[0]["env_vars"] if methods else []
     if not isinstance(value, list) or not all(
         isinstance(env_var, str) for env_var in value
     ):
         raise ConfigFormatError(f"provider {provider} env_vars must be a list of strings")
     return value
+
+
+def _auth_methods(
+    provider: str,
+    provider_tables: Mapping[str, Mapping[str, object]],
+) -> list[AuthMethodConfig]:
+    table = provider_tables.get(provider, {})
+    value = table.get("auth_methods")
+    if value is None:
+        auth_kind = table.get("auth_kind", "")
+        env_vars = table.get("env_vars", [])
+        if not auth_kind and not env_vars:
+            return []
+        if not isinstance(auth_kind, str):
+            raise ConfigFormatError(f"provider {provider} auth_kind must be a string")
+        if not isinstance(env_vars, list) or not all(
+            isinstance(env_var, str) for env_var in env_vars
+        ):
+            raise ConfigFormatError(
+                f"provider {provider} env_vars must be a list of strings"
+            )
+        return [{"auth_kind": auth_kind, "env_vars": env_vars}]
+
+    if not isinstance(value, list):
+        raise ConfigFormatError(f"provider {provider} auth_methods must be a list")
+
+    methods: list[AuthMethodConfig] = []
+    for index, item in enumerate(value, start=1):
+        if not isinstance(item, dict):
+            raise ConfigFormatError(
+                f"provider {provider} auth_methods entry {index} must be a table"
+            )
+        auth_kind = item.get("auth_kind", "")
+        env_vars = item.get("env_vars", [])
+        if not isinstance(auth_kind, str) or not auth_kind:
+            raise ConfigFormatError(
+                f"provider {provider} auth_methods entry {index} auth_kind must be a string"
+            )
+        if not isinstance(env_vars, list) or not all(
+            isinstance(env_var, str) for env_var in env_vars
+        ):
+            raise ConfigFormatError(
+                f"provider {provider} auth_methods entry {index} env_vars must be a list of strings"
+            )
+        methods.append({"auth_kind": auth_kind, "env_vars": env_vars})
+    return methods
 
 
 def _profile_model(name: str, model_tables: Mapping[str, Mapping[str, object]]) -> str:
@@ -676,6 +714,20 @@ def _render_loaded_config(
             "]",
             "",
         ])
+        for method in _auth_methods(provider, provider_tables):
+            lines.extend(
+                [
+                    f"[[providers.{provider}.auth_methods]]",
+                    f"auth_kind = {_toml_string(method['auth_kind'])}",
+                    "env_vars = [",
+                ]
+            )
+            for env_var in method["env_vars"]:
+                lines.append(f"  {_toml_string(env_var)},")
+            lines.extend([
+                "]",
+                "",
+            ])
 
     for name in model_tables:
         lines.extend(
@@ -729,6 +781,7 @@ def _doctor_provider(
     configured = provider in enabled_providers or provider in provider_tables
     configured_env_vars = _env_vars(provider, provider_tables)
     configured_auth_kind = _auth_kind(provider, provider_tables)
+    configured_auth_methods = _auth_methods(provider, provider_tables)
 
     if status is None:
         return {
@@ -739,6 +792,7 @@ def _doctor_provider(
             "ready": False,
             "configured_auth_kind": configured_auth_kind,
             "detected_auth_kind": "",
+            "configured_auth_methods": configured_auth_methods,
             "configured_env_vars": configured_env_vars,
             "detected_env_vars": [],
             "missing_env_vars": [],
@@ -753,6 +807,7 @@ def _doctor_provider(
         "ready": status["ready"],
         "configured_auth_kind": configured_auth_kind,
         "detected_auth_kind": status["auth_kind"],
+        "configured_auth_methods": configured_auth_methods,
         "configured_env_vars": configured_env_vars,
         "detected_env_vars": status["detected_env_vars"],
         "missing_env_vars": status["missing_env_vars"],

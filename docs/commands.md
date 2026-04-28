@@ -125,13 +125,13 @@ Current `auth add` behavior:
 - Requires the provider to be in the packaged provider set.
 - Requires required environment variables to be visible for API-key or Vertex providers before recording metadata.
 - Supports Ollama/local-server metadata without requiring a secret.
-- Records provider name, auth kind, and detected env var names only.
+- Records provider name, selected auth kind, detected env var names, and an auth method record for the selected/current method only.
 - Supports `--yes` for non-interactive setup/test use.
 - Does not store API keys, bearer tokens, refresh tokens, subscription tokens, browser cookies, provider session dumps, or default models.
 
 Future behavior:
 
-- `auth add` may prompt interactively for setup choices beyond the current confirmation prompt, but it must not prompt inside work commands.
+- `auth add` may prompt interactively for setup choices beyond the current confirmation prompt, including auth method choice when a provider has more than one supported method.
 - `auth add` may record additional non-secret preferences.
 - `auth list` should make any user-authored fallback policy visible if fallback policies are added later.
 - No command may silently switch from subscription/OAuth-style auth to API-key billing.
@@ -144,14 +144,16 @@ Current `auth doctor` behavior:
 - Combines configured provider auth metadata with current environment detection.
 - Reports configured status, detected status, readiness, configured env var names, detected env var names, missing env var names, and provider notes.
 - Supports `--json` for machine-readable output.
+- JSON output includes configured auth method records for future multi-method setup flows.
 - Does not print secret values.
 - Does not call provider APIs.
 
 Current `auth list` behavior:
 
 - Reads `~/.config/think-tank/config.toml` by default, or `--config <path>`.
-- Prints enabled providers, auth kinds, and env var names.
+- Prints enabled providers, selected auth kinds, and env var names.
 - Supports `--json` for machine-readable output.
+- JSON output includes `auth_methods` for future multi-method setup flows.
 - Does not print or read secret values.
 
 Current `auth remove` behavior:

@@ -475,11 +475,23 @@ def test_cli_config_auth_list_json_reports_metadata_without_secret_values() -> N
             "provider": "ollama",
             "auth_kind": "local_server",
             "env_vars": [],
+            "auth_methods": [
+                {
+                    "auth_kind": "local_server",
+                    "env_vars": [],
+                }
+            ],
         },
         {
             "provider": "groq",
             "auth_kind": "api_key_env",
             "env_vars": ["GROQ_API_KEY"],
+            "auth_methods": [
+                {
+                    "auth_kind": "api_key_env",
+                    "env_vars": ["GROQ_API_KEY"],
+                }
+            ],
         }
     ]
     assert "gsk-secret" not in result.output
@@ -553,6 +565,12 @@ def test_cli_config_auth_add_yes_adds_ollama_without_secret_values() -> None:
             "provider": "ollama",
             "auth_kind": "local_server",
             "env_vars": [],
+            "auth_methods": [
+                {
+                    "auth_kind": "local_server",
+                    "env_vars": [],
+                }
+            ],
         }
     ]
 

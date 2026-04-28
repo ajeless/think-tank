@@ -107,6 +107,6 @@ Packaged model-provider support currently includes:
 
 Think Tank does not store provider secrets. Provider credentials are read from environment variables, and config files store only non-secret metadata such as enabled provider names and detected env var names. Provider subscription sign-in is not implemented unless a provider exposes a supported auth path for third-party tools; Think Tank will not silently switch from subscription auth to API billing.
 
-`think config auth add <provider>` creates or updates Think Tank's non-secret auth metadata for one known provider. It records auth kind and detected env var names only, requires required env vars to be visible for API-key providers, supports local Ollama metadata without secrets, and can run non-interactively with `--yes`.
+`think config auth add <provider>` creates or updates Think Tank's non-secret auth metadata for one known provider. It records the selected auth kind, detected env var names, and a non-secret auth method record only. It requires required env vars to be visible for API-key providers, supports local Ollama metadata without secrets, and can run non-interactively with `--yes`.
 
 `think config auth remove <provider>` removes Think Tank's non-secret auth metadata only. It does not edit shell files, delete environment variables, change provider account settings, remove keychain entries, or delete local Ollama models.

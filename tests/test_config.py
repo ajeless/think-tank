@@ -89,6 +89,12 @@ def test_write_detected_provider_config_stores_no_secret_values(tmp_path: Path) 
     assert parsed["schema_version"] == 1
     assert parsed["secrets"] == "environment"
     assert parsed["enabled_providers"] == ["openai", "anthropic", "groq"]
+    assert parsed["providers"]["openai"]["auth_methods"] == [
+        {
+            "auth_kind": "api_key_env",
+            "env_vars": ["OPENAI_API_KEY"],
+        }
+    ]
 
 
 def test_write_detected_provider_config_rejects_unknown_provider(tmp_path: Path) -> None:
@@ -120,11 +126,23 @@ def test_list_config_auth_returns_enabled_provider_metadata(tmp_path: Path) -> N
                 "provider": "openai",
                 "auth_kind": "api_key_env",
                 "env_vars": ["OPENAI_API_KEY"],
+                "auth_methods": [
+                    {
+                        "auth_kind": "api_key_env",
+                        "env_vars": ["OPENAI_API_KEY"],
+                    }
+                ],
             },
             {
                 "provider": "groq",
                 "auth_kind": "api_key_env",
                 "env_vars": ["GROQ_API_KEY"],
+                "auth_methods": [
+                    {
+                        "auth_kind": "api_key_env",
+                        "env_vars": ["GROQ_API_KEY"],
+                    }
+                ],
             },
         ],
     }
@@ -160,6 +178,12 @@ def test_add_config_auth_creates_config_for_ready_env_provider(tmp_path: Path) -
     parsed = load_config(config_path)
     assert parsed["enabled_providers"] == ["openai"]
     assert parsed["providers"]["openai"]["auth_kind"] == "api_key_env"
+    assert parsed["providers"]["openai"]["auth_methods"] == [
+        {
+            "auth_kind": "api_key_env",
+            "env_vars": ["OPENAI_API_KEY"],
+        }
+    ]
 
 
 def test_add_config_auth_adds_ollama_without_secret(tmp_path: Path) -> None:
@@ -173,6 +197,98 @@ def test_add_config_auth_adds_ollama_without_secret(tmp_path: Path) -> None:
     parsed = load_config(config_path)
     assert parsed["enabled_providers"] == ["ollama"]
     assert parsed["providers"]["ollama"]["env_vars"] == []
+    assert parsed["providers"]["ollama"]["auth_methods"] == [
+        {
+            "auth_kind": "local_server",
+            "env_vars": [],
+        }
+    ]
+
+
+def test_list_config_auth_reads_legacy_flat_provider_metadata(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "schema_version = 1",
+                'secrets = "environment"',
+                'enabled_providers = ["openai"]',
+                "",
+                "[providers.openai]",
+                'auth_kind = "api_key_env"',
+                'env_vars = ["OPENAI_API_KEY"]',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = list_config_auth(config_path)
+
+    assert result["providers"] == [
+        {
+            "provider": "openai",
+            "auth_kind": "api_key_env",
+            "env_vars": ["OPENAI_API_KEY"],
+            "auth_methods": [
+                {
+                    "auth_kind": "api_key_env",
+                    "env_vars": ["OPENAI_API_KEY"],
+                }
+            ],
+        }
+    ]
+
+
+def test_list_config_auth_reads_multiple_provider_auth_methods(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "schema_version = 1",
+                'secrets = "environment"',
+                'enabled_providers = ["openai"]',
+                "",
+                "[providers.openai]",
+                'auth_kind = "api_key_env"',
+                'env_vars = ["OPENAI_API_KEY"]',
+                "",
+                "[[providers.openai.auth_methods]]",
+                'auth_kind = "api_key_env"',
+                'env_vars = ["OPENAI_API_KEY"]',
+                "",
+                "[[providers.openai.auth_methods]]",
+                'auth_kind = "official_oauth"',
+                "env_vars = []",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = list_config_auth(config_path)
+
+    assert result["providers"] == [
+        {
+            "provider": "openai",
+            "auth_kind": "api_key_env",
+            "env_vars": ["OPENAI_API_KEY"],
+            "auth_methods": [
+                {
+                    "auth_kind": "api_key_env",
+                    "env_vars": ["OPENAI_API_KEY"],
+                },
+                {
+                    "auth_kind": "official_oauth",
+                    "env_vars": [],
+                },
+            ],
+        }
+    ]
 
 
 def test_add_config_auth_updates_existing_provider_metadata(tmp_path: Path) -> None:
@@ -359,6 +475,12 @@ def test_doctor_config_auth_combines_configured_and_detected_metadata(
     assert openai["configured"] is True
     assert openai["detected"] is False
     assert openai["ready"] is False
+    assert openai["configured_auth_methods"] == [
+        {
+            "auth_kind": "api_key_env",
+            "env_vars": ["OPENAI_API_KEY"],
+        }
+    ]
     assert openai["configured_env_vars"] == ["OPENAI_API_KEY"]
     assert openai["missing_env_vars"] == ["OPENAI_API_KEY"]
 
@@ -396,6 +518,12 @@ def test_doctor_config_auth_includes_unknown_configured_provider(tmp_path: Path)
     assert futureai["configured"] is True
     assert futureai["detected"] is False
     assert futureai["ready"] is False
+    assert futureai["configured_auth_methods"] == [
+        {
+            "auth_kind": "api_key_env",
+            "env_vars": ["FUTUREAI_API_KEY"],
+        }
+    ]
     assert futureai["configured_env_vars"] == ["FUTUREAI_API_KEY"]
     assert futureai["notes"] == [
         "Provider is configured but is not in the packaged provider set."
