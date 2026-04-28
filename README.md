@@ -66,6 +66,14 @@ think config model list
 think config model remove fast
 ```
 
+Record, list, or remove explicit user-authored defaults:
+
+```bash
+think config defaults set --model-profile fast
+think config defaults list
+think config defaults remove model-profile
+```
+
 Explicitly validate real provider credentials and one selected model:
 
 ```bash
@@ -93,6 +101,8 @@ my-idea/
 `think ask` loads the project `state.json` as read-only context, calls the requested `provider:model`, prints the model response, and appends the raw interaction to `transcripts/ask.jsonl`. It does not synthesize, mutate project state, choose default models, run multiple agents, or commit to git.
 
 `think config model add <name> --model <provider:model>` stores a user-named model profile in non-secret config. `think ask` can use that profile with `--model-profile <name>`. Model profiles are explicit user choices; Think Tank still does not store or choose a default model, and it does not create fallback policies.
+
+`think config defaults set --model-profile <name>` records an explicit user-authored default model profile in non-secret config. Work commands do not use recorded defaults automatically yet; `think ask` still requires `--model` or `--model-profile`.
 
 `think config validate` is an explicit opt-in diagnostic for real provider access. It may call provider APIs with a tiny validation prompt, so it is never run by `doctor`, `init`, or work commands by default. It reports success, missing credentials, authentication failures, quota or rate limits, provider SDK/configuration issues, and generic provider failures without printing secret values. For Ollama, it checks the local server and verifies that the requested model is installed. It does not write transcripts, mutate project state, choose fallback models, or store secrets.
 

@@ -117,6 +117,27 @@ class ModelRemoveResult(TypedDict):
     removed: bool
 
 
+class DefaultsConfig(TypedDict):
+    model_profile: str | None
+
+
+class DefaultsSetResult(TypedDict):
+    config_path: str
+    defaults: DefaultsConfig
+
+
+class DefaultsListResult(TypedDict):
+    config_path: str
+    defaults: DefaultsConfig
+
+
+class DefaultRemoveResult(TypedDict):
+    config_path: str
+    removed_default: str
+    removed: bool
+    defaults: DefaultsConfig
+
+
 class ConfigNotFoundError(FileNotFoundError):
     """Raised when a requested Think Tank config file does not exist."""
 
@@ -361,6 +382,7 @@ def remove_model_profile(config_path: Path, name: str) -> ModelRemoveResult:
     enabled_providers = _enabled_providers(config)
     provider_tables = _provider_tables(config)
     model_tables = _model_tables(config)
+    defaults = _defaults_table(config)
 
     removed = name in model_tables
     updated_model_tables = {
@@ -368,12 +390,16 @@ def remove_model_profile(config_path: Path, name: str) -> ModelRemoveResult:
         for profile_name, table in model_tables.items()
         if profile_name != name
     }
+    updated_defaults = dict(defaults)
+    if updated_defaults.get("model_profile") == name:
+        del updated_defaults["model_profile"]
     resolved_path.write_text(
         _render_loaded_config(
             config,
             enabled_providers=enabled_providers,
             provider_tables=provider_tables,
             model_tables=updated_model_tables,
+            defaults_table=updated_defaults,
         ),
         encoding="utf-8",
     )
@@ -382,6 +408,88 @@ def remove_model_profile(config_path: Path, name: str) -> ModelRemoveResult:
         "config_path": str(resolved_path),
         "removed_profile": name,
         "removed": removed,
+    }
+
+
+def set_config_defaults(
+    config_path: Path,
+    *,
+    model_profile: str | None = None,
+) -> DefaultsSetResult:
+    resolved_path = config_path.expanduser()
+    if model_profile is None:
+        raise ValueError("defaults set requires --model-profile <name>")
+
+    model_profile = _model_profile_name(model_profile)
+    config = _load_existing_config(resolved_path)
+    enabled_providers = _enabled_providers(config)
+    provider_tables = _provider_tables(config)
+    model_tables = _model_tables(config)
+    defaults = _defaults_table(config)
+
+    if model_profile not in model_tables:
+        raise ModelProfileNotFoundError(f"model profile not found: {model_profile}")
+
+    updated_defaults = dict(defaults)
+    updated_defaults["model_profile"] = model_profile
+    resolved_path.write_text(
+        _render_loaded_config(
+            config,
+            enabled_providers=enabled_providers,
+            provider_tables=provider_tables,
+            model_tables=model_tables,
+            defaults_table=updated_defaults,
+        ),
+        encoding="utf-8",
+    )
+
+    return {
+        "config_path": str(resolved_path),
+        "defaults": _defaults_result(updated_defaults),
+    }
+
+
+def list_config_defaults(config_path: Path) -> DefaultsListResult:
+    resolved_path = config_path.expanduser()
+    config = _load_existing_config(resolved_path)
+    defaults = _defaults_table(config)
+    return {
+        "config_path": str(resolved_path),
+        "defaults": _defaults_result(defaults),
+    }
+
+
+def remove_config_default(config_path: Path, default_name: str) -> DefaultRemoveResult:
+    resolved_path = config_path.expanduser()
+    default_name = _default_name(default_name)
+    config = _load_existing_config(resolved_path)
+    enabled_providers = _enabled_providers(config)
+    provider_tables = _provider_tables(config)
+    model_tables = _model_tables(config)
+    defaults = _defaults_table(config)
+
+    removed = default_name in defaults
+    updated_defaults = {
+        name: value
+        for name, value in defaults.items()
+        if name != default_name
+    }
+    resolved_path.write_text(
+        _render_loaded_config(
+            config,
+            enabled_providers=enabled_providers,
+            provider_tables=provider_tables,
+            model_tables=model_tables,
+            defaults_table=updated_defaults,
+        ),
+        encoding="utf-8",
+    )
+
+    return {
+        "config_path": str(resolved_path),
+        "removed_default": default_name,
+        "removed": removed,
+        "defaults": _defaults_result(updated_defaults),
     }
 
 
@@ -690,6 +798,33 @@ def _model_tables(config: Mapping[str, object]) -> dict[str, dict[str, object]]:
     return tables
 
 
+def _defaults_table(config: Mapping[str, object]) -> dict[str, str]:
+    defaults = config.get("defaults", {})
+    if not isinstance(defaults, dict):
+        raise ConfigFormatError("config defaults must be a table")
+
+    table: dict[str, str] = {}
+    if "model_profile" in defaults:
+        value = defaults["model_profile"]
+        if not isinstance(value, str):
+            raise ConfigFormatError("config defaults model_profile must be a string")
+        table["model_profile"] = _model_profile_name(value)
+    return table
+
+
+def _defaults_result(defaults: Mapping[str, str]) -> DefaultsConfig:
+    return {
+        "model_profile": defaults.get("model_profile"),
+    }
+
+
+def _default_name(name: str) -> str:
+    name = name.strip().replace("-", "_")
+    if name == "model_profile":
+        return name
+    raise ValueError(f"unknown default: {name or '-'} (supported: model-profile)")
+
+
 def _auth_kind(provider: str, provider_tables: Mapping[str, Mapping[str, object]]) -> str:
     value = provider_tables.get(provider, {}).get("auth_kind", "")
     if value == "":
@@ -771,9 +906,12 @@ def _render_loaded_config(
     enabled_providers: list[str],
     provider_tables: Mapping[str, Mapping[str, object]],
     model_tables: Mapping[str, Mapping[str, object]] | None = None,
+    defaults_table: Mapping[str, str] | None = None,
 ) -> str:
     if model_tables is None:
         model_tables = _model_tables(config)
+    if defaults_table is None:
+        defaults_table = _defaults_table(config)
 
     lines = [
         f"schema_version = {_schema_version(config)}",
@@ -828,6 +966,14 @@ def _render_loaded_config(
                 "",
             ]
         )
+
+    if defaults_table:
+        lines.extend([
+            "[defaults]",
+        ])
+        if model_profile := defaults_table.get("model_profile"):
+            lines.append(f"model_profile = {_toml_string(model_profile)}")
+        lines.append("")
 
     return "\n".join(lines)
 

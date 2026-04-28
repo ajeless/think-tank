@@ -45,6 +45,8 @@ Think Tank detects provider credentials from the user's environment and may writ
 
 Config files may also record named model profiles as explicit `provider:model` strings. Model profiles must not become implicit defaults, hidden fallback chains, or credential selectors.
 
+Config files may record explicit user-authored defaults under `[defaults]`. Defaults are setup-owned preferences, not product-invented choices. Work commands may use a recorded default only when their command contract explicitly says they do. Until then, commands such as `think ask` must keep requiring explicit command input or an explicit model profile flag.
+
 Setup commands may guide users through provider detection and configuration. Work commands must stay non-interactive and must not prompt for credentials mid-run.
 
 Subscription account sign-in is provider-specific and only acceptable through an official supported auth path. The tool must not implement unsupported subscription-token workarounds, and it must not silently fall back from subscription auth to API billing. Any validation that could spend money or hit external provider rate limits must be opt-in.

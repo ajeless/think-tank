@@ -14,12 +14,15 @@ from think_tank.config import (
     detect_provider_statuses,
     doctor_config_auth,
     list_config_auth,
+    list_config_defaults,
     list_model_profiles,
     load_config,
     provider_auth_method_options,
+    remove_config_default,
     remove_config_auth,
     remove_model_profile,
     resolve_model_profile,
+    set_config_defaults,
     write_detected_provider_config,
 )
 
@@ -542,6 +545,78 @@ def test_model_profile_crud_preserves_auth_metadata(tmp_path: Path) -> None:
     assert parsed_after_remove["providers"]["ollama"]["auth_kind"] == "local_server"
 
 
+def test_config_defaults_crud_uses_existing_model_profile(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    add_config_auth(config_path, "ollama", env={})
+    add_model_profile(
+        config_path,
+        name="local",
+        model="ollama:llama3.2:latest",
+    )
+
+    set_result = set_config_defaults(config_path, model_profile="local")
+    list_result = list_config_defaults(config_path)
+
+    assert set_result == {
+        "config_path": str(config_path),
+        "defaults": {
+            "model_profile": "local",
+        },
+    }
+    assert list_result == set_result
+    parsed = load_config(config_path)
+    assert parsed["defaults"]["model_profile"] == "local"
+    assert parsed["models"]["local"]["model"] == "ollama:llama3.2:latest"
+    assert parsed["providers"]["ollama"]["auth_kind"] == "local_server"
+
+    remove_result = remove_config_default(config_path, "model-profile")
+    assert remove_result == {
+        "config_path": str(config_path),
+        "removed_default": "model_profile",
+        "removed": True,
+        "defaults": {
+            "model_profile": None,
+        },
+    }
+    assert "defaults" not in load_config(config_path)
+
+
+def test_config_defaults_require_existing_model_profile(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    add_model_profile(config_path, name="fast", model="groq:llama-3.1-8b")
+
+    with pytest.raises(ModelProfileNotFoundError, match="missing"):
+        set_config_defaults(config_path, model_profile="missing")
+
+
+def test_config_defaults_set_requires_existing_config(tmp_path: Path) -> None:
+    with pytest.raises(ConfigNotFoundError, match="config not found"):
+        set_config_defaults(tmp_path / "missing.toml", model_profile="fast")
+
+
+def test_config_defaults_reject_unknown_default_remove(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    add_model_profile(config_path, name="fast", model="groq:llama-3.1-8b")
+
+    with pytest.raises(ValueError, match="unknown default"):
+        remove_config_default(config_path, "provider")
+
+
+def test_model_profile_remove_clears_matching_default(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    add_model_profile(config_path, name="fast", model="groq:llama-3.1-8b")
+    set_config_defaults(config_path, model_profile="fast")
+
+    remove_model_profile(config_path, "fast")
+
+    parsed = load_config(config_path)
+    assert "models" not in parsed
+    assert "defaults" not in parsed
+    assert list_config_defaults(config_path)["defaults"] == {
+        "model_profile": None,
+    }
+
+
 def test_model_profile_add_preserves_existing_profiles_during_config_init(
     tmp_path: Path,
 ) -> None:
@@ -560,6 +635,24 @@ def test_model_profile_add_preserves_existing_profiles_during_config_init(
     }
     parsed = load_config(config_path)
     assert parsed["enabled_providers"] == ["openai"]
+    assert parsed["providers"]["openai"]["env_vars"] == ["OPENAI_API_KEY"]
+    assert "sk-secret" not in config_path.read_text(encoding="utf-8")
+
+
+def test_config_init_preserves_existing_defaults(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    add_model_profile(config_path, name="fast", model="groq:llama-3.1-8b")
+    set_config_defaults(config_path, model_profile="fast")
+
+    write_detected_provider_config(
+        config_path,
+        env={"OPENAI_API_KEY": "sk-secret"},
+        enabled_providers=["openai"],
+    )
+
+    parsed = load_config(config_path)
+    assert parsed["defaults"]["model_profile"] == "fast"
+    assert parsed["models"]["fast"]["model"] == "groq:llama-3.1-8b"
     assert parsed["providers"]["openai"]["env_vars"] == ["OPENAI_API_KEY"]
     assert "sk-secret" not in config_path.read_text(encoding="utf-8")
 
