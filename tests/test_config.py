@@ -6,19 +6,15 @@ from think_tank.config import (
     ConfigFormatError,
     ConfigNotFoundError,
     ModelProfileNotFoundError,
-    ProviderAuthMethodSpec,
     ProviderAuthNotReadyError,
-    ProviderSpec,
     add_config_auth,
     add_model_profile,
     default_config_path,
-    detect_provider_statuses,
     doctor_config_auth,
     list_config_auth,
     list_config_defaults,
     list_model_profiles,
     load_config,
-    provider_auth_method_options,
     remove_config_default,
     remove_config_auth,
     remove_model_profile,
@@ -26,37 +22,7 @@ from think_tank.config import (
     set_config_defaults,
     write_detected_provider_config,
 )
-
-
-def test_detect_provider_statuses_reports_detected_env_var_names_only() -> None:
-    statuses = detect_provider_statuses(
-        {
-            "OPENAI_API_KEY": "sk-secret",
-            "OPENROUTER_API_KEY": "or-secret",
-            "GROQ_API_KEY": "gsk-secret",
-            "GOOGLE_PROJECT_ID": "project",
-            "GOOGLE_REGION": "us-central1",
-        }
-    )
-
-    openai = _status(statuses, "openai")
-    assert openai["ready"] is True
-    assert openai["detected_env_vars"] == ["OPENAI_API_KEY"]
-    assert "sk-secret" not in str(openai)
-
-    openrouter = _status(statuses, "openrouter")
-    assert openrouter["ready"] is True
-    assert openrouter["detected_env_vars"] == ["OPENROUTER_API_KEY"]
-    assert "or-secret" not in str(openrouter)
-
-    groq = _status(statuses, "groq")
-    assert groq["ready"] is True
-    assert groq["detected_env_vars"] == ["GROQ_API_KEY"]
-    assert "gsk-secret" not in str(groq)
-
-    google = _status(statuses, "google")
-    assert google["ready"] is False
-    assert google["missing_env_vars"] == ["GOOGLE_APPLICATION_CREDENTIALS"]
+from think_tank.provider_registry import ProviderAuthMethodSpec, ProviderSpec
 
 
 def test_load_config_wraps_invalid_toml(tmp_path: Path) -> None:
@@ -65,70 +31,6 @@ def test_load_config_wraps_invalid_toml(tmp_path: Path) -> None:
 
     with pytest.raises(ConfigFormatError, match="config TOML is invalid"):
         load_config(config_path)
-
-
-def test_ollama_is_ready_without_secret() -> None:
-    statuses = detect_provider_statuses({})
-
-    ollama = _status(statuses, "ollama")
-    assert ollama["ready"] is True
-    assert ollama["auth_kind"] == "local_server"
-    assert ollama["detected_env_vars"] == []
-
-
-def test_provider_auth_method_options_report_ready_methods_without_secrets(
-    monkeypatch,
-) -> None:
-    monkeypatch.setattr(
-        "think_tank.provider_registry.PROVIDER_SPECS",
-        (
-            ProviderSpec(
-                name="testai",
-                display_name="Test AI",
-                auth_kind="api_key_env",
-                auth_methods=(
-                    ProviderAuthMethodSpec(
-                        auth_kind="api_key_env",
-                        env_vars=("TESTAI_API_KEY",),
-                        required_env_vars=("TESTAI_API_KEY",),
-                    ),
-                    ProviderAuthMethodSpec(
-                        auth_kind="local_server",
-                        env_vars=("TESTAI_URL",),
-                    ),
-                ),
-            ),
-        ),
-    )
-
-    options = provider_auth_method_options(
-        "testai",
-        env={"TESTAI_API_KEY": "secret-key", "TESTAI_URL": "http://localhost"},
-    )
-
-    assert options == [
-        {
-            "provider": "testai",
-            "display_name": "Test AI",
-            "auth_kind": "api_key_env",
-            "ready": True,
-            "detected_env_vars": ["TESTAI_API_KEY"],
-            "required_env_vars": ["TESTAI_API_KEY"],
-            "missing_env_vars": [],
-            "notes": [],
-        },
-        {
-            "provider": "testai",
-            "display_name": "Test AI",
-            "auth_kind": "local_server",
-            "ready": True,
-            "detected_env_vars": ["TESTAI_URL"],
-            "required_env_vars": [],
-            "missing_env_vars": [],
-            "notes": [],
-        },
-    ]
-    assert "secret-key" not in str(options)
 
 
 def test_write_detected_provider_config_stores_no_secret_values(tmp_path: Path) -> None:
@@ -266,7 +168,6 @@ def test_add_config_auth_can_select_supported_auth_kind(
             ProviderSpec(
                 name="testai",
                 display_name="Test AI",
-                auth_kind="api_key_env",
                 auth_methods=(
                     ProviderAuthMethodSpec(
                         auth_kind="api_key_env",
@@ -312,7 +213,6 @@ def test_add_config_auth_without_selection_uses_primary_method(
             ProviderSpec(
                 name="testai",
                 display_name="Test AI",
-                auth_kind="api_key_env",
                 auth_methods=(
                     ProviderAuthMethodSpec(
                         auth_kind="api_key_env",
@@ -842,10 +742,6 @@ def test_default_config_path_uses_xdg_config_home() -> None:
     assert default_config_path({"XDG_CONFIG_HOME": "/tmp/config"}) == Path(
         "/tmp/config/think-tank/config.toml"
     )
-
-
-def _status(statuses, provider: str):
-    return next(status for status in statuses if status["provider"] == provider)
 
 
 def _doctor_provider(result, provider: str):

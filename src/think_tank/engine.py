@@ -20,7 +20,11 @@ from .model_client import (
     OllamaModelRegistry,
     OllamaRegistryError,
 )
-from .provider_registry import PROVIDER_SPECS, detect_provider_statuses
+from .provider_registry import (
+    PROVIDER_SPECS,
+    detect_provider_statuses,
+    provider_env_var_names,
+)
 
 
 VALIDATION_PROMPT = "Reply with OK."
@@ -325,7 +329,7 @@ def _validation_result(
 def _safe_exception_message(exc: Exception, env: Mapping[str, str]) -> str:
     message = str(exc)
     for spec in PROVIDER_SPECS:
-        for env_var in spec.env_vars:
+        for env_var in provider_env_var_names(spec):
             value = env.get(env_var)
             if value:
                 message = message.replace(value, "[redacted]")
