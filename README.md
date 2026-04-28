@@ -106,7 +106,7 @@ my-idea/
 
 `think ask` loads the project `state.json` as read-only context, calls the requested `provider:model`, prints the model response, and appends the raw interaction to `transcripts/ask.jsonl`. It does not synthesize, mutate project state, choose default models, run multiple agents, or commit to git.
 
-`think init` is an interactive setup command. It detects ready provider auth paths, lets the user select which ones to record, writes only non-secret auth metadata, and can prompt for named model profiles from user-entered `provider:model` strings. It can also record one explicit user-authored default after profile setup. Work commands do not use recorded defaults automatically yet, so `think ask` still requires `--model` or `--model-profile`.
+`think init` is an interactive setup command. It detects implemented ready provider auth paths, lets the user select which ones to record, writes only non-secret auth metadata, and can prompt for named model profiles from user-entered `provider:model` strings. It can also record one explicit user-authored default after profile setup. Work commands do not use recorded defaults automatically yet, so `think ask` still requires `--model` or `--model-profile`.
 
 `think config model add <name> --model <provider:model>` stores a user-named model profile in non-secret config. `think ask` can use that profile with `--model-profile <name>`. Model profiles are explicit user choices; Think Tank still does not store or choose a default model, and it does not create fallback policies.
 
@@ -124,6 +124,8 @@ Packaged model-provider support currently includes:
 - Groq: `groq:<model>` with `GROQ_API_KEY`, routed through Groq's OpenAI-compatible API.
 
 Think Tank does not store provider secrets. Provider credentials are read from environment variables, and config files store only non-secret metadata such as enabled provider names and detected env var names. Provider subscription sign-in is not implemented unless a provider exposes a supported auth path for third-party tools; Think Tank will not silently switch from subscription auth to API billing.
+
+The provider registry distinguishes implemented selectable auth paths from planned official paths. Planned paths may appear in guided setup as disabled guidance, but config writes accept only implemented ready paths and still store no secret values.
 
 Subscription-backed auth is a roadmap priority for reducing live-testing API costs where providers officially support it. Think Tank will treat product-specific subscription auth, such as coding-tool sign-in flows, as separate integrations unless the provider documents that path for general API clients.
 

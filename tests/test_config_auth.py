@@ -231,6 +231,18 @@ def test_add_config_auth_rejects_unsupported_auth_kind(
         )
 
 
+def test_add_config_auth_rejects_planned_official_auth_kind(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="not implemented yet"):
+        add_config_auth(
+            tmp_path / "config.toml",
+            "openai",
+            env={"OPENAI_API_KEY": "sk-secret"},
+            auth_kind="subscription_official",
+        )
+
+
 def test_add_config_auth_adds_ollama_without_secret(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
 

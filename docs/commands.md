@@ -60,8 +60,9 @@ Current status: implemented.
 Current behavior:
 
 - `think init` may prompt because setup commands may be interactive.
-- Detects ready provider auth paths from the current environment.
-- Lets the user select which ready auth paths to record.
+- Detects implemented ready provider auth paths from the current environment.
+- Lets the user select which implemented ready auth paths to record.
+- May show planned official auth paths as disabled guidance.
 - Writes `~/.config/think-tank/config.toml` by default, or `--config <path>`.
 - Stores provider names, auth kinds, env var names, and auth method records only.
 - Does not store API keys, bearer tokens, refresh tokens, subscription tokens, browser cookies, provider session dumps, or provider secret values.
@@ -141,9 +142,10 @@ Current `auth add` behavior:
 - Reads and rewrites `~/.config/think-tank/config.toml` by default, or `--config <path>`.
 - Creates the config file if it does not already exist.
 - Requires the provider to be in the packaged provider set.
-- Requires required environment variables to be visible for API-key or Vertex providers before recording metadata.
+- Requires required environment variables to be visible for API-key or service-account providers before recording metadata.
 - Supports Ollama/local-server metadata without requiring a secret.
 - In interactive mode, prompts for auth method selection when a provider has more than one implemented ready method.
+- Does not allow planned official auth methods to be selected or written until implementation exists.
 - Records provider name, selected auth kind, detected env var names, and an auth method record for the selected/current method only.
 - Supports `--yes` for non-interactive setup/test use; `--yes` uses the provider's current primary implemented method and does not select fallback methods.
 - Does not store API keys, bearer tokens, refresh tokens, subscription tokens, browser cookies, provider session dumps, or default models.

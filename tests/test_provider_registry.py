@@ -37,6 +37,7 @@ def test_detect_provider_statuses_reports_detected_env_var_names_only() -> None:
 
     google = _status(statuses, "google")
     assert google["ready"] is False
+    assert google["auth_kind"] == "service_account_env"
     assert google["missing_env_vars"] == ["GOOGLE_APPLICATION_CREDENTIALS"]
 
 
@@ -84,6 +85,10 @@ def test_provider_auth_method_options_report_ready_methods_without_secrets(
             "display_name": "Test AI",
             "auth_kind": "api_key_env",
             "ready": True,
+            "implemented": True,
+            "official": True,
+            "selectable": True,
+            "support_status": "implemented",
             "detected_env_vars": ["TESTAI_API_KEY"],
             "required_env_vars": ["TESTAI_API_KEY"],
             "missing_env_vars": [],
@@ -94,6 +99,10 @@ def test_provider_auth_method_options_report_ready_methods_without_secrets(
             "display_name": "Test AI",
             "auth_kind": "local_server",
             "ready": True,
+            "implemented": True,
+            "official": True,
+            "selectable": True,
+            "support_status": "implemented",
             "detected_env_vars": ["TESTAI_URL"],
             "required_env_vars": [],
             "missing_env_vars": [],
@@ -101,6 +110,25 @@ def test_provider_auth_method_options_report_ready_methods_without_secrets(
         },
     ]
     assert "secret-key" not in str(options)
+
+
+def test_provider_auth_method_options_include_planned_official_paths() -> None:
+    options = provider_auth_method_options("openai", env={"OPENAI_API_KEY": "sk-secret"})
+
+    api_key = _option(options, "api_key_env")
+    assert api_key["implemented"] is True
+    assert api_key["official"] is True
+    assert api_key["ready"] is True
+    assert api_key["selectable"] is True
+    assert api_key["support_status"] == "implemented"
+
+    subscription = _option(options, "subscription_official")
+    assert subscription["implemented"] is False
+    assert subscription["official"] is True
+    assert subscription["ready"] is False
+    assert subscription["selectable"] is False
+    assert subscription["support_status"] == "planned_official"
+    assert "sk-secret" not in str(options)
 
 
 def test_provider_env_var_names_deduplicates_auth_method_env_vars() -> None:
@@ -129,3 +157,7 @@ def test_provider_spec_requires_auth_method() -> None:
 
 def _status(statuses, provider: str):
     return next(status for status in statuses if status["provider"] == provider)
+
+
+def _option(options, auth_kind: str):
+    return next(option for option in options if option["auth_kind"] == auth_kind)

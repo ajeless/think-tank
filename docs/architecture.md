@@ -49,7 +49,7 @@ Config files may also record named model profiles as explicit `provider:model` s
 
 Config files may record explicit user-authored defaults under `[defaults]`. Defaults are setup-owned preferences, not product-invented choices. Work commands may use a recorded default only when their command contract explicitly says they do. Until then, commands such as `think ask` must keep requiring explicit command input or an explicit model profile flag.
 
-Setup commands may guide users through provider detection and configuration. Top-level `think init` is the first guided setup flow: it detects ready auth paths, lets the user select the paths to record, writes non-secret auth metadata, and may record model profiles and explicit defaults. Work commands must stay non-interactive and must not prompt for credentials mid-run.
+Setup commands may guide users through provider detection and configuration. Top-level `think init` is the first guided setup flow: it detects implemented ready auth paths, lets the user select the paths to record, may show planned official paths as disabled guidance, writes non-secret auth metadata, and may record model profiles and explicit defaults. Work commands must stay non-interactive and must not prompt for credentials mid-run.
 
 Subscription account sign-in is provider-specific and only acceptable through an official supported auth path. The tool must not implement unsupported subscription-token workarounds, and it must not silently fall back from subscription auth to API billing. Any validation that could spend money or hit external provider rate limits must be opt-in.
 
@@ -67,7 +67,7 @@ Validation must use the same no-middleman rules as model calls:
 
 Ollama is local-provider validation rather than credential validation. The validator checks local server availability using `OLLAMA_API_URL` or the default `http://localhost:11434`, then verifies that the requested model appears in the local model registry.
 
-Provider metadata is owned by the provider registry layer, not by CLI command code or config file mutation code. Engine behavior and config behavior may both depend on the packaged provider registry, but the registry should stay focused on supported provider names, auth method metadata, and environment-based readiness detection. Packaged provider specs use explicit auth method records as their only auth shape.
+Provider metadata is owned by the provider registry layer, not by CLI command code or config file mutation code. Engine behavior and config behavior may both depend on the packaged provider registry, but the registry should stay focused on supported provider names, auth method metadata, implementation status, official-path status, and environment-based readiness detection. Packaged provider specs use explicit auth method records as their only auth shape.
 
 User config file concerns are separate from provider metadata. Config storage helpers own default config path resolution, TOML loading errors, text writing, and TOML string escaping. Shared config helpers own TOML table validation and rendering. Higher-level config behavior is split by product concern: auth records, model profiles, and explicit defaults each have their own module. `think_tank.config` remains a compatibility facade for CLI and external imports; it should not regain behavior ownership.
 
@@ -120,7 +120,7 @@ Explicit defaults are different from hidden defaults. A setup flow may offer to 
 
 Unsupported auth paths are out of scope until the provider documents them for third-party tools. Browser-cookie scraping, private subscription-token reuse, or undocumented app-token extraction would violate the no-middleman and no-surprise-billing principles even if technically possible.
 
-Provider config supports multiple auth method records per provider. The current flat `auth_kind` and `env_vars` fields remain the selected/current method and keep existing config readable. New writes also include an `auth_methods` collection under each provider so setup flows can add official OAuth, service-account, local-server, or subscription-supported methods without treating them as fallback paths. Existing flat provider metadata is still accepted and is normalized in engine results.
+Provider config supports multiple auth method records per provider. The current flat `auth_kind` and `env_vars` fields remain the selected/current method and keep existing config readable. New writes also include an `auth_methods` collection under each provider so setup flows can add implemented official OAuth, service-account, local-server, or subscription-supported methods without treating them as fallback paths. Existing flat provider metadata is still accepted and is normalized in engine results.
 
 `think config auth add` may select among multiple ready auth methods when a provider has more than one implemented method. `--yes` remains deterministic and uses the provider's current primary implemented method. Subscription/OAuth-style methods must not be listed as selectable until they are backed by an official supported provider path.
 
@@ -134,8 +134,8 @@ Official does not always mean general-purpose. Some providers document subscript
 
 Near-term roadmap:
 
-- Track provider-supported auth methods in the provider registry even before all are implemented, but make only implemented ready methods selectable.
-- Let `think init` explain when a provider has a promising official path that is not implemented yet, without presenting it as a choice.
+- Track provider-supported auth methods in the provider registry even before all are implemented, and make only implemented ready methods selectable.
+- Let `think init` explain when a provider has a promising official path that is not implemented yet by showing it as disabled guidance.
 - Prefer local or subscription-backed official paths for live testing when available, then direct API keys, then aggregators only when explicitly selected.
 - Add fallback policy only as visible user-authored config, never as automatic recovery.
 - Keep `think config validate` as the opt-in boundary for any check that may call a provider or spend credits.

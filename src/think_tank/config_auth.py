@@ -288,7 +288,10 @@ def _selected_auth_method_option(
 ) -> ProviderAuthMethodOption:
     options = provider_auth_method_options(provider, env=env)
     if auth_kind is None:
-        return options[0]
+        for option in options:
+            if option["implemented"]:
+                return option
+        raise ValueError(f"provider has no implemented auth methods: {provider}")
 
     auth_kind = auth_kind.strip()
     if not auth_kind:
@@ -296,8 +299,14 @@ def _selected_auth_method_option(
 
     for option in options:
         if option["auth_kind"] == auth_kind:
+            if not option["implemented"]:
+                raise ValueError(
+                    f"auth kind for {provider} is not implemented yet: {auth_kind}"
+                )
             return option
-    supported = ", ".join(option["auth_kind"] for option in options)
+    supported = ", ".join(
+        option["auth_kind"] for option in options if option["implemented"]
+    )
     raise ValueError(
         f"unsupported auth kind for {provider}: {auth_kind} (supported: {supported})"
     )

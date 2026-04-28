@@ -110,6 +110,17 @@ def test_initialize_setup_rejects_duplicate_provider_auth_paths(
         )
 
 
+def test_initialize_setup_rejects_planned_official_auth_path(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="not implemented yet"):
+        initialize_setup(
+            tmp_path / "config.toml",
+            env={"OPENAI_API_KEY": "sk-secret"},
+            auth_selections=[
+                {"provider": "openai", "auth_kind": "subscription_official"},
+            ],
+        )
+
+
 def test_initialize_setup_rejects_incomplete_model_profile(
     tmp_path: Path,
 ) -> None:
